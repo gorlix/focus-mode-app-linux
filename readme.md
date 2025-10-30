@@ -1,8 +1,8 @@
 # 📚 Modalità Studio
 
-![Python](https://img.shields.ioshields.io/badge/license-/badge/platform-Linux-light)applicazione desktop per bloccare app e webapp distraenti durante le sessioni di studio o lavoro. Sviluppata con Python e design Material 3.
-
-![Screenshot](assets ✨ Caratteristiche
+Applicazione desktop per bloccare app e webapp distraenti durante le sessioni di studio o lavoro. Sviluppata con Python e design Material 3.
+ 
+Caratteristiche
 
 - 🎯 **Blocco app native** - Termina automaticamente processi di applicazioni specifiche
 - 🌐 **Blocco webapp** - Blocca webapp browser (Chrome, Firefox, ecc.) tramite URL o ID
