@@ -208,3 +208,6 @@ __marimo__/
 
 # Pycharm
 .idea/
+
+# Ignore Data
+data/
