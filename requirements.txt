@@ -1,0 +1,22 @@
+# Focus Mode App - Python Dependencies
+# Install: pip install -r requirements.txt
+
+# GUI Framework (Material 3 design)
+ttkbootstrap>=1.10.1
+
+# Process monitoring and management
+psutil>=5.9.0
+
+# System tray icon (KDE native)
+PyQt6>=6.0.0
+
+# Image processing for icons
+Pillow>=10.0.0
+
+# Rich terminal formatting for CLI
+rich>=13.0.0
+
+# Note: tkinter is NOT included here - install via system package manager:
+# Fedora:  sudo dnf install python3-tkinter
+# Arch:    sudo pacman -S tk
+# Ubuntu:  sudo apt install python3-tk
