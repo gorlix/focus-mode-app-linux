@@ -28,7 +28,7 @@ Caratteristiche
 ### 1. Clona il repository
 
 ```bash
-git clone https://github.com/tuousername/Mode_Study.git
+git clone https://github.com/gorlix/Mode_Study.git
 cd Mode_Study
 ```
 
@@ -259,7 +259,7 @@ pip install -r requirements.txt
 
 ```bash
 # Clona repo
-git clone https://github.com/tuousername/Mode_Study.git
+git clone https://github.com/gorlix/Mode_Study.git
 cd Mode_Study
 
 # Crea virtual environment (opzionale)
