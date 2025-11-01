@@ -300,7 +300,7 @@ python -c "from core.blocker import is_blocking_active; print(is_blocking_active
 - [ ] **Profili** - Diversi set di app per scenari diversi (studio, lavoro, relax)
 - [ ] **Autostart** - Avvio automatico con il sistema
 - [ ] **Password protection** - Richiede password per disattivare il blocco
-- [ ] **CLI** - Interfaccia command line per controllo remoto
+- [x] **CLI** - Interfaccia command line per controllo remoto
 - [ ] **Cross-platform** - Supporto Windows e macOS
 
 ***
