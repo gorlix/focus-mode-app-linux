@@ -1,64 +1,112 @@
 """
 main.py
-Entry point principale dell'applicazione Modalità Studio.
+Entry point principale dell'applicazione Focus Mode App.
+Gestisce inizializzazione, caricamento risorse e avvio thread principali.
+Integra session restore per il ripristino app automatico.
 """
 
+import sys
 import threading
+import os
+import signal
+
 from config import load_config
 from core.storage import load_blocked_items
-from core.blocker import start_blocking_loop
+from core.blocker import start_blocking_loop, set_blocking_active
+from core.session import session_tracker
 from gui.main_window import AppGui
 from utils.tray_icon import create_and_run_tray_icon, stop_tray_icon
 
 
+_blocking_thread = None
+_tray_thread = None
+_app_instance = None
+
+
+def cleanup_handlers():
+    """Ferma i thread prima di uscire."""
+    try:
+        set_blocking_active(False)
+
+        try:
+            stop_tray_icon()
+        except:
+            pass
+
+    except:
+        pass
+
+
+def signal_handler(signum, frame):
+    """Gestisce segnali di interruzione."""
+    print("\n[INFO] Segnale di interruzione ricevuto")
+    cleanup_handlers()
+    sys.exit(0)
+
+
 def main():
-    """Funzione principale che avvia l'applicazione."""
-    print("[INFO] Avvio Modalità Studio...")
-    
-    # Carica configurazione e crea directory necessarie
+    """
+    Funzione principale che avvia l'applicazione Focus Mode App.
+    Inizializza configurazione, carica dati persistenti, avvia GUI e thread worker.
+    """
+    print("[INFO] Avvio Focus Mode App...")
+
+    global _blocking_thread, _tray_thread, _app_instance
+
     load_config()
-    
-    # Carica elementi bloccati salvati
+
     load_blocked_items()
-    
-    # Crea GUI
-    app = AppGui()
-    
+
+    session_tracker.load_restore_config()
+
+    _app_instance = AppGui()
+
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+
     # ========================================================================
     # AVVIA THREAD BLOCCO PROCESSI
     # ========================================================================
-    blocking_thread = threading.Thread(
+
+    _blocking_thread = threading.Thread(
         target=start_blocking_loop,
         daemon=True,
         name="BlockingThread"
     )
-    blocking_thread.start()
+    _blocking_thread.start()
     print("[INFO] Thread di blocco avviato")
-    
+
     # ========================================================================
     # AVVIA THREAD TRAY ICON
     # ========================================================================
-    tray_thread = threading.Thread(
+
+    _tray_thread = threading.Thread(
         target=create_and_run_tray_icon,
-        args=(app,),
+        args=(_app_instance,),
         daemon=True,
         name="TrayThread"
     )
-    tray_thread.start()
+    _tray_thread.start()
     print("[INFO] Thread system tray avviato")
-    
+
     # ========================================================================
     # MAINLOOP GUI
     # ========================================================================
+
     try:
-        app.mainloop()
+        _app_instance.mainloop()
+
     except KeyboardInterrupt:
         print("\n[INFO] Interruzione da tastiera")
+
+    except Exception as e:
+        print(f"[ERROR] Errore mainloop: {e}")
+
     finally:
         print("[INFO] Chiusura applicazione...")
-        stop_tray_icon()
+        cleanup_handlers()
+        sys.exit(0)
 
 
 if __name__ == "__main__":
     main()
-
