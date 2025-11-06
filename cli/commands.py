@@ -1,7 +1,8 @@
 """
 cli/commands.py
 Comandi CLI per Focus Mode App.
-Interfaccia command-line per gestire app bloccate, sessioni e restore.
+Interfaccia command-line per gestire app bloccate, sessioni, restore e focus lock.
+Supporta sia timer countdown che target time per il focus lock.
 """
 
 import sys
@@ -39,8 +40,8 @@ console = Console()
 
 def cmd_status():
     """
-    Mostra lo stato corrente del blocco e della sessione.
-    Include informazioni su blocco attivo, elementi bloccati e app da ripristinare.
+    Mostra lo stato corrente del blocco, sessione e focus lock.
+    Include informazioni su blocco attivo, elementi bloccati, app da ripristinare e timer.
     """
     stats = get_blocking_stats()
 
@@ -51,6 +52,12 @@ def cmd_status():
     restore_info = f"Apps da ripristinare: [cyan]{stats['apps_to_restore_count']}[/]"
     restore_status = f"Auto-restore: [bold]{'ABILITATO' if stats['auto_restore_enabled'] else 'DISABILITATO'}[/]"
 
+    lock_info = stats.get('focus_lock', {})
+    if lock_info.get('locked'):
+        lock_status = f"🔒 Focus Lock: [red]ATTIVO[/] - {lock_info['remaining_time']} rimanenti"
+    else:
+        lock_status = "Focus Lock: [green]Nessun lock attivo[/]"
+
     console.print()
     console.print(Panel(
         f"[bold {status_color}]{status_emoji} Blocco {status_text}[/]\n\n"
@@ -58,6 +65,7 @@ def cmd_status():
         f"App killate in sessione: [yellow]{stats['killed_apps_in_session']}[/]\n"
         f"{restore_info}\n"
         f"{restore_status}\n"
+        f"{lock_status}\n"
         f"Intervallo controllo: [dim]{stats['blocking_interval']}s[/]",
         title="📊 Stato Focus Mode App",
         border_style="blue",
@@ -194,10 +202,17 @@ def cmd_start():
 def cmd_stop():
     """
     Disattiva il blocco dei processi.
-    Se ci sono app da ripristinare, chiede conferma all'utente.
+    Controlla focus lock prima di permettere disattivazione.
     """
     if not is_blocking_active():
         console.print("\n[yellow]ℹ️  Il blocco è già disattivo[/]\n")
+        return
+
+    from core.blocker import can_disable_blocking
+
+    can_disable, reason = can_disable_blocking()
+    if not can_disable:
+        console.print(f"\n[red]❌ {reason}[/]\n")
         return
 
     set_blocking_active(False)
@@ -220,7 +235,16 @@ def cmd_toggle():
     """
     Inverti lo stato del blocco (attivo <-> disattivato).
     Gestisce anche il restore automatico alla disattivazione.
+    Controlla focus lock prima di disattivare.
     """
+    if is_blocking_active():
+        from core.blocker import can_disable_blocking
+
+        can_disable, reason = can_disable_blocking()
+        if not can_disable:
+            console.print(f"\n[red]❌ {reason}[/]\n")
+            return
+
     new_state = toggle_blocking()
 
     if new_state:
@@ -304,6 +328,114 @@ def cmd_toggle_restore():
 
 
 # ============================================================================
+# COMANDI GESTIONE FOCUS LOCK
+# ============================================================================
+
+def cmd_set_timer(minutes: int):
+    """
+    Attiva focus lock con timer countdown.
+
+    Args:
+        minutes: Durata timer in minuti
+    """
+    try:
+        from core.focus_lock import focus_lock
+
+        if focus_lock.set_timer_lock(minutes):
+            console.print(f"\n[green]🔒 Focus Lock attivato: {minutes} minuti[/]\n")
+
+            if not is_blocking_active():
+                cmd_start()
+        else:
+            console.print("\n[red]❌ Errore attivazione timer[/]\n")
+
+    except Exception as e:
+        console.print(f"\n[red]❌ Errore: {e}[/]\n")
+
+
+def cmd_set_target_time(hour: int, minute: int):
+    """
+    Attiva focus lock fino a orario target.
+    Supporta orario di domani se l'ora è già passata.
+
+    Args:
+        hour: Ora target (0-23)
+        minute: Minuto target (0-59)
+    """
+    try:
+        from core.focus_lock import focus_lock
+
+        if not (0 <= hour <= 23 and 0 <= minute <= 59):
+            console.print("\n[red]❌ Ora non valida (HH: 0-23, MM: 0-59)[/]\n")
+            return
+
+        if focus_lock.set_target_time_lock(hour, minute):
+            console.print(f"\n[green]🔒 Target Time Lock attivato: fino alle {hour:02d}:{minute:02d}[/]\n")
+
+            if not is_blocking_active():
+                cmd_start()
+        else:
+            console.print("\n[red]❌ Errore attivazione target time[/]\n")
+
+    except Exception as e:
+        console.print(f"\n[red]❌ Errore: {e}[/]\n")
+
+
+def cmd_lock_status():
+    """Mostra stato focus lock con countdown e dettagli."""
+    try:
+        from core.focus_lock import focus_lock
+
+        info = focus_lock.get_lock_info()
+
+        if info['locked']:
+            mode = "⏲️  TIMER" if info['mode'] == "timer" else "🕐 TARGET TIME"
+
+            console.print()
+            console.print(Panel(
+                f"[red]🔒 FOCUS LOCK ATTIVO[/]\n\n"
+                f"Modalità: [cyan]{mode}[/]\n"
+                f"Tempo rimanente: [yellow]{info['remaining_time']}[/]\n"
+                f"Scadenza: [cyan]{info['end_time']}[/]\n"
+                f"Progress: [cyan]{info['progress_percentage']:.1f}%[/]",
+                title="Focus Lock Status",
+                border_style="red",
+                box=box.ROUNDED
+            ))
+            console.print()
+        else:
+            console.print("\n[green]✅ Nessun lock attivo[/]\n")
+
+    except ImportError:
+        console.print("\n[yellow]⚠️  Focus lock non disponibile[/]\n")
+    except Exception as e:
+        console.print(f"\n[red]❌ Errore: {e}[/]\n")
+
+
+def cmd_clear_lock():
+    """
+    Rimuove focus lock manualmente (force unlock).
+    Richiede conferma dell'utente.
+    """
+    try:
+        from core.focus_lock import focus_lock
+        from rich.prompt import Confirm
+
+        if not focus_lock.is_locked():
+            console.print("\n[yellow]ℹ️  Nessun lock attivo[/]\n")
+            return
+
+        if Confirm.ask("\n[red]⚠️  Sbloccare manualmente il focus lock?[/]"):
+            focus_lock.force_unlock()
+            console.print("\n[green]✅ Focus lock rimosso![/]\n")
+        else:
+            console.print("\n[yellow]Operazione annullata[/]\n")
+
+    except Exception as e:
+        console.print(f"\n[red]❌ Errore: {e}[/]\n")
+
+
+# ============================================================================
 # COMANDI GESTIONE LISTA
 # ============================================================================
 
@@ -343,5 +475,9 @@ __all__ = [
     'cmd_remove_restore',
     'cmd_restore',
     'cmd_toggle_restore',
+    'cmd_set_timer',
+    'cmd_set_target_time',
+    'cmd_lock_status',
+    'cmd_clear_lock',
     'cmd_clear',
 ]

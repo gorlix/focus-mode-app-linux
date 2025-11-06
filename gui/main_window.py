@@ -3,6 +3,7 @@ gui/main_window.py
 Finestra principale dell'applicazione Focus Mode App.
 Gestisce l'interfaccia utente per configurare app e webapp da bloccare.
 Integra pannello di gestione app da ripristinare automaticamente.
+Integra focus lock timer e target time per impedire disattivazione prematura.
 """
 
 from tkinter import messagebox
@@ -13,7 +14,8 @@ from core.blocker import (
     is_blocking_active,
     toggle_blocking,
     set_restore_enabled,
-    is_restore_enabled
+    is_restore_enabled,
+    can_disable_blocking
 )
 from core.storage import (
     add_blocked_item,
@@ -38,6 +40,7 @@ class AppGui(ttk.Window):
     Finestra principale dell'applicazione Focus Mode App.
     Gestisce l'interfaccia utente per configurare app e webapp da bloccare.
     Include pannello di gestione app da ripristinare.
+    Include focus lock timer e target time per sessioni concentrate.
     """
 
     def __init__(self):
@@ -66,6 +69,7 @@ class AppGui(ttk.Window):
 
         self._create_title(main_frame)
         self._create_toggle_button(main_frame)
+        self._create_timer_panel(main_frame)
         self._create_restore_panel(main_frame)
         self._create_blocked_section(main_frame)
         self._create_feedback_label(main_frame)
@@ -86,6 +90,180 @@ class AppGui(ttk.Window):
             width=30
         )
         self.toggle_btn.pack(pady=(0, 20))
+
+    def _create_timer_panel(self, parent):
+        """
+        Crea pannello timer/target time per focus lock.
+        Permette di impostare timer countdown o ora target.
+        """
+        timer_frame = ttk.LabelFrame(
+            parent,
+            text="FOCUS LOCK",
+            bootstyle="warning",
+            padding=16
+        )
+        timer_frame.pack(fill="x", pady=(0, 16))
+
+        # Radio buttons per scegliere modalità
+        mode_frame = ttk.Frame(timer_frame)
+        mode_frame.pack(fill="x", pady=(0, 8))
+
+        self.lock_mode = ttk.StringVar(value="timer")
+
+        radio_timer = ttk.Radiobutton(
+            mode_frame,
+            text="⏲️ Timer (minuti)",
+            variable=self.lock_mode,
+            value="timer",
+            bootstyle="warning",
+            command=self.update_lock_input_visibility
+        )
+        radio_timer.pack(side="left", padx=(0, 16))
+
+        radio_target = ttk.Radiobutton(
+            mode_frame,
+            text="🕐 Fino alle ore",
+            variable=self.lock_mode,
+            value="target",
+            bootstyle="warning",
+            command=self.update_lock_input_visibility
+        )
+        radio_target.pack(side="left")
+
+        # Frame timer input
+        self.timer_input_frame = ttk.Frame(timer_frame)
+        self.timer_input_frame.pack(fill="x", pady=(0, 8))
+
+        ttk.Label(self.timer_input_frame, text="Minuti:").pack(side="left", padx=(0, 8))
+
+        self.timer_entry = ttk.Entry(self.timer_input_frame, width=10)
+        self.timer_entry.pack(side="left", padx=(0, 8))
+        self.timer_entry.insert(0, "25")
+
+        # Frame target time input
+        self.target_input_frame = ttk.Frame(timer_frame)
+
+        ttk.Label(self.target_input_frame, text="Ora:").pack(side="left", padx=(0, 8))
+
+        self.target_hour_entry = ttk.Entry(self.target_input_frame, width=5)
+        self.target_hour_entry.pack(side="left", padx=(0, 4))
+        self.target_hour_entry.insert(0, "14")
+
+        ttk.Label(self.target_input_frame, text=":").pack(side="left", padx=2)
+
+        self.target_minute_entry = ttk.Entry(self.target_input_frame, width=5)
+        self.target_minute_entry.pack(side="left", padx=(4, 8))
+        self.target_minute_entry.insert(0, "30")
+
+        ttk.Label(self.target_input_frame, text="(HH:MM)").pack(side="left", padx=(0, 8))
+
+        # Bottone attiva lock
+        self.btn_activate_lock = material_button(
+            timer_frame,
+            "Attiva Lock",
+            self.activate_lock,
+            button_type="warning"
+        )
+        self.btn_activate_lock.pack(fill="x", pady=(0, 8))
+
+        # Status label
+        self.timer_status_label = ttk.Label(
+            timer_frame,
+            text="Nessun lock attivo",
+            font=("Roboto", 11, "bold"),
+            foreground="gray"
+        )
+        self.timer_status_label.pack()
+
+        # Imposta visibilità iniziale
+        self.update_lock_input_visibility()
+
+        # Avvia update loop
+        self.update_timer_display()
+
+    def update_lock_input_visibility(self):
+        """Mostra/nasconde input in base alla modalità selezionata."""
+        if self.lock_mode.get() == "timer":
+            self.timer_input_frame.pack(fill="x", pady=(0, 8))
+            self.target_input_frame.pack_forget()
+        else:
+            self.timer_input_frame.pack_forget()
+            self.target_input_frame.pack(fill="x", pady=(0, 8))
+
+    def activate_lock(self):
+        """Attiva focus lock in modalità timer o target time."""
+        try:
+            from core.focus_lock import focus_lock
+
+            mode = self.lock_mode.get()
+
+            if mode == "timer":
+                minutes = int(self.timer_entry.get())
+
+                if minutes <= 0:
+                    self.show_feedback("Inserisci minuti > 0")
+                    return
+
+                if focus_lock.set_timer_lock(minutes):
+                    self.show_feedback(f"Timer Lock attivato: {minutes} min")
+                else:
+                    self.show_feedback("Errore attivazione timer")
+                    return
+
+            else:
+                hour = int(self.target_hour_entry.get())
+                minute = int(self.target_minute_entry.get())
+
+                if not (0 <= hour <= 23 and 0 <= minute <= 59):
+                    self.show_feedback("Ora non valida (HH: 0-23, MM: 0-59)")
+                    return
+
+                if focus_lock.set_target_time_lock(hour, minute):
+                    self.show_feedback(f"Target Time Lock: {hour:02d}:{minute:02d}")
+                else:
+                    self.show_feedback("Errore attivazione target time")
+                    return
+
+            if not is_blocking_active():
+                toggle_blocking()
+                self.update_toggle_button()
+
+        except ValueError:
+            self.show_feedback("Inserisci valori numerici validi")
+        except Exception as e:
+            self.show_feedback(f"Errore: {e}")
+
+    def update_timer_display(self):
+        """
+        Aggiorna display timer ogni secondo.
+        Mostra countdown e gestisce stato bottone disattiva.
+        """
+        try:
+            from core.focus_lock import focus_lock
+
+            if focus_lock.is_locked():
+                info = focus_lock.get_lock_info()
+                self.timer_status_label.config(
+                    text=f"LOCKED - {info['remaining_time']} rimanenti",
+                    foreground="red"
+                )
+
+                if is_blocking_active():
+                    self.toggle_btn.config(state="disabled")
+            else:
+                self.timer_status_label.config(
+                    text="Nessun lock attivo",
+                    foreground="gray"
+                )
+
+                self.toggle_btn.config(state="normal")
+
+        except ImportError:
+            pass
+        except Exception as e:
+            print(f"[ERROR] Timer display update: {e}")
+
+        self.after(1000, self.update_timer_display)
 
     def _create_restore_panel(self, parent):
         """
@@ -248,7 +426,14 @@ class AppGui(ttk.Window):
         """
         Attiva/disattiva il blocco e aggiorna l'interfaccia.
         Gestisce anche il ripristino automatico alla disattivazione.
+        Controlla focus lock prima di disattivare.
         """
+        if is_blocking_active():
+            can_disable, reason = can_disable_blocking()
+            if not can_disable:
+                self.show_feedback(f"{reason}")
+                return
+
         new_state = toggle_blocking()
         self.update_toggle_button()
 

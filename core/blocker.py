@@ -3,22 +3,20 @@ core/blocker.py
 Logica di blocco dei processi (app native e webapp).
 Gestisce il monitoraggio continuo e la terminazione dei processi bloccati.
 Integra session restore per tracciare app killate.
+Integra focus lock per impedire disattivazione prematura.
 """
 
 import os
 import time
 import psutil
-from typing import Set
+from typing import Set, Tuple
 
 from config import BLOCKING_INTERVAL, BLOCKING_ACTIVE_ON_STARTUP, AUTO_RESTORE_ENABLED
 
-# Stato globale del blocco (True = attivo, False = disattivato)
 blocking_active = BLOCKING_ACTIVE_ON_STARTUP
 
-# Set per tracciare i PID già killati (evita log ripetitivi)
 _killed_pids: Set[int] = set()
 
-# Flag per controllare se restore automatico è abilitato in questa sessione
 _restore_enabled_this_session = AUTO_RESTORE_ENABLED
 
 
@@ -53,10 +51,34 @@ def set_blocking_active(active: bool) -> None:
         print("[INFO] Blocco DISATTIVATO")
 
 
+def can_disable_blocking() -> Tuple[bool, str]:
+    """
+    Verifica se è possibile disattivare il blocco.
+    Controlla focus lock prima di permettere disattivazione.
+
+    Returns:
+        Tuple[bool, str]: (can_disable, reason)
+    """
+    if not blocking_active:
+        return (True, "Blocco già disattivo")
+
+    try:
+        from core.focus_lock import focus_lock
+
+        if focus_lock.is_locked():
+            info = focus_lock.get_lock_info()
+            return (False, f"Focus Lock attivo - {info['remaining_time']} rimanenti")
+    except ImportError:
+        pass
+
+    return (True, "OK")
+
+
 def toggle_blocking() -> bool:
     """
     Inverte lo stato del blocco (attivo <-> disattivato).
     Gestisce auto-restore alla disattivazione.
+    Controlla focus lock prima di disattivare.
 
     Returns:
         bool: Nuovo stato del blocco
@@ -64,6 +86,13 @@ def toggle_blocking() -> bool:
     global blocking_active
 
     old_state = blocking_active
+
+    if old_state:
+        can_disable, reason = can_disable_blocking()
+        if not can_disable:
+            print(f"[WARNING] Cannot disable blocking: {reason}")
+            return blocking_active
+
     blocking_active = not blocking_active
 
     if blocking_active:
@@ -319,10 +348,10 @@ def cleanup_killed_pids() -> None:
 
 def get_blocking_stats() -> dict:
     """
-    Ritorna statistiche sul blocco e session restore.
+    Ritorna statistiche sul blocco, session restore e focus lock.
 
     Returns:
-        dict: Dizionario con statistiche di blocco e restore
+        dict: Dizionario con statistiche di blocco, restore e lock
     """
     from core.storage import blocked_items
 
@@ -334,6 +363,12 @@ def get_blocking_stats() -> dict:
         killed_apps_count = 0
         restore_list_count = 0
 
+    try:
+        from core.focus_lock import focus_lock
+        lock_info = focus_lock.get_lock_info()
+    except:
+        lock_info = {"locked": False}
+
     return {
         "blocking_active": blocking_active,
         "blocked_items_count": len(blocked_items),
@@ -342,6 +377,7 @@ def get_blocking_stats() -> dict:
         "auto_restore_enabled": _restore_enabled_this_session,
         "apps_to_restore_count": restore_list_count,
         "killed_apps_in_session": killed_apps_count,
+        "focus_lock": lock_info,
     }
 
 
@@ -354,6 +390,7 @@ __all__ = [
     'is_blocking_active',
     'set_blocking_active',
     'toggle_blocking',
+    'can_disable_blocking',
     'set_restore_enabled',
     'is_restore_enabled',
     'kill_blocked_apps',
