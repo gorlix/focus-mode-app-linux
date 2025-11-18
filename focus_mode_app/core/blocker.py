@@ -11,7 +11,7 @@ import time
 import psutil
 from typing import Set, Tuple
 
-from config import BLOCKING_INTERVAL, BLOCKING_ACTIVE_ON_STARTUP, AUTO_RESTORE_ENABLED
+from focus_mode_app.config import BLOCKING_INTERVAL, BLOCKING_ACTIVE_ON_STARTUP, AUTO_RESTORE_ENABLED
 
 blocking_active = BLOCKING_ACTIVE_ON_STARTUP
 
@@ -63,7 +63,7 @@ def can_disable_blocking() -> Tuple[bool, str]:
         return (True, "Blocco già disattivo")
 
     try:
-        from core.focus_lock import focus_lock
+        from focus_mode_app.core.focus_lock import focus_lock
 
         if focus_lock.is_locked():
             info = focus_lock.get_lock_info()
@@ -117,9 +117,9 @@ def _handle_auto_restore() -> None:
         return
 
     try:
-        from core.session import session_tracker
-        from core.restore import restore_all_apps
-        from core.notifications import notify_restore_complete
+        from focus_mode_app.core.session import session_tracker
+        from focus_mode_app.core.restore import restore_all_apps
+        from focus_mode_app.core.notifications import notify_restore_complete
 
         killed_apps = session_tracker.get_killed_apps()
 
@@ -175,7 +175,7 @@ def kill_blocked_apps() -> int:
     if not blocking_active:
         return 0
 
-    from core.storage import blocked_items
+    from focus_mode_app.core.storage import blocked_items
 
     if not blocked_items:
         return 0
@@ -202,7 +202,7 @@ def kill_blocked_apps() -> int:
                             _killed_pids.add(proc_pid)
 
                             try:
-                                from core.session import session_tracker
+                                from focus_mode_app.core.session import session_tracker
                                 app_state = session_tracker.capture_app_state(proc)
                                 if app_state:
                                     session_tracker.add_killed_app(app_name, app_state)
@@ -232,7 +232,7 @@ def kill_blocked_webapps() -> int:
     if not blocking_active:
         return 0
 
-    from core.storage import blocked_items
+    from focus_mode_app.core.storage import blocked_items
 
     if not blocked_items:
         return 0
@@ -262,7 +262,7 @@ def kill_blocked_webapps() -> int:
                             _killed_pids.add(proc_pid)
 
                             try:
-                                from core.session import session_tracker
+                                from focus_mode_app.core.session import session_tracker
                                 app_state = session_tracker.capture_app_state(proc)
                                 if app_state:
                                     session_tracker.add_killed_app(webapp_string, app_state)
@@ -353,10 +353,10 @@ def get_blocking_stats() -> dict:
     Returns:
         dict: Dizionario con statistiche di blocco, restore e lock
     """
-    from core.storage import blocked_items
+    from focus_mode_app.core.storage import blocked_items
 
     try:
-        from core.session import session_tracker
+        from focus_mode_app.core.session import session_tracker
         killed_apps_count = len(session_tracker.get_killed_apps())
         restore_list_count = len(session_tracker.restore_list)
     except:
@@ -364,7 +364,7 @@ def get_blocking_stats() -> dict:
         restore_list_count = 0
 
     try:
-        from core.focus_lock import focus_lock
+        from focus_mode_app.core.focus_lock import focus_lock
         lock_info = focus_lock.get_lock_info()
     except:
         lock_info = {"locked": False}

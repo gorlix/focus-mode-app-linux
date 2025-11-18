@@ -9,21 +9,21 @@ Integra focus lock timer e target time per impedire disattivazione prematura.
 from tkinter import messagebox
 import ttkbootstrap as ttk
 
-from config import WINDOW_WIDTH, WINDOW_HEIGHT, GUI_THEME, APP_TITLE
-from core.blocker import (
+from focus_mode_app.config import WINDOW_WIDTH, WINDOW_HEIGHT, GUI_THEME, APP_TITLE
+from focus_mode_app.core.blocker import (
     is_blocking_active,
     toggle_blocking,
     set_restore_enabled,
     is_restore_enabled,
     can_disable_blocking
 )
-from core.storage import (
+from focus_mode_app.core.storage import (
     add_blocked_item,
     remove_blocked_item,
     get_blocked_items
 )
-from utils.tray_icon import update_tray_menu
-from gui.material_theme import (
+from focus_mode_app.utils.tray_icon import update_tray_menu
+from focus_mode_app.gui.material_theme import (
     apply_material3_style,
     material_label,
     material_entry,
@@ -193,7 +193,7 @@ class AppGui(ttk.Window):
     def activate_lock(self):
         """Attiva focus lock in modalità timer o target time."""
         try:
-            from core.focus_lock import focus_lock
+            from focus_mode_app.core.focus_lock import focus_lock
 
             mode = self.lock_mode.get()
 
@@ -239,7 +239,7 @@ class AppGui(ttk.Window):
         Mostra countdown e gestisce stato bottone disattiva.
         """
         try:
-            from core.focus_lock import focus_lock
+            from focus_mode_app.core.focus_lock import focus_lock
 
             if focus_lock.is_locked():
                 info = focus_lock.get_lock_info()
@@ -480,7 +480,7 @@ class AppGui(ttk.Window):
         app_name = items[index]["name"]
 
         try:
-            from core.session import session_tracker
+            from focus_mode_app.core.session import session_tracker
             session_tracker.add_to_restore(app_name)
             self.refresh_restore_list()
             self.show_feedback(f"{app_name} aggiunto a restore!")
@@ -498,7 +498,7 @@ class AppGui(ttk.Window):
             return
 
         try:
-            from core.session import session_tracker
+            from focus_mode_app.core.session import session_tracker
 
             app_names = list(session_tracker.restore_list.keys())
             if selection[0] >= len(app_names):
@@ -519,7 +519,7 @@ class AppGui(ttk.Window):
         self.restore_listbox.delete(0, ttk.END)
 
         try:
-            from core.session import session_tracker
+            from focus_mode_app.core.session import session_tracker
 
             for app_name in session_tracker.restore_list.keys():
                 self.restore_listbox.insert(ttk.END, f"{app_name}")

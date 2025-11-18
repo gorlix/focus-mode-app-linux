@@ -1,0 +1,11 @@
+# Include documentazione
+include README.md
+include LICENSE
+include requirements.txt
+
+# Esclugi files non necessari
+recursive-exclude tests *
+recursive-exclude docs *
+recursive-exclude .git *
+recursive-exclude __pycache__ *
+recursive-exclude *.egg-info *

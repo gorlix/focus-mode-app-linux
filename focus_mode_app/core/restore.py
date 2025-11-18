@@ -5,9 +5,9 @@ Ripristino app senza xdotool (Wayland-safe).
 
 import subprocess
 import time
-from typing import List, Dict, Tuple
+from typing import Dict, Tuple
 
-from core.session import session_tracker
+from focus_mode_app.core.session import session_tracker
 
 
 def restore_app(app_state: Dict) -> Tuple[bool, str]:
