@@ -10,12 +10,12 @@ import threading
 import os
 import signal
 
-from config import load_config
-from core.storage import load_blocked_items
-from core.blocker import start_blocking_loop, set_blocking_active
-from core.session import session_tracker
-from gui.main_window import AppGui
-from utils.tray_icon import create_and_run_tray_icon, stop_tray_icon
+from focus_mode_app.config import load_config
+from focus_mode_app.core.storage import load_blocked_items
+from focus_mode_app.core.blocker import start_blocking_loop, set_blocking_active
+from focus_mode_app.core.session import session_tracker
+from focus_mode_app.gui.main_window import AppGui
+from focus_mode_app.utils.tray_icon import create_and_run_tray_icon, stop_tray_icon
 
 
 _blocking_thread = None

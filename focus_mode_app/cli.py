@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-study-mode-cli.py
+cli.py
 Interfaccia command-line per Focus Mode App.
 
 Supporta gestione blocco, restore e focus lock (timer/target time).
@@ -32,9 +32,9 @@ import sys
 import argparse
 from rich.console import Console
 
-from config import load_config
-from core.storage import load_blocked_items
-from cli.commands import (
+from focus_mode_app.config import load_config
+from focus_mode_app.core.storage import load_blocked_items
+from focus_mode_app.cli.commands import (
     cmd_status,
     cmd_list,
     cmd_list_restore,

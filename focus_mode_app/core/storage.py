@@ -5,10 +5,9 @@ Include migrazione automatica dal vecchio formato.
 """
 
 import json
-from pathlib import Path
 from typing import List, Dict
 
-from config import get_data_file_path
+from focus_mode_app.config import get_data_file_path
 
 # Lista globale degli elementi bloccati
 # Ogni elemento è un dict: {"name": "...", "type": "app" | "webapp"}

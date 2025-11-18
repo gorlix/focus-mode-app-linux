@@ -6,12 +6,11 @@ Senza xdotool - solo tracking basic.
 
 import json
 import time
-from pathlib import Path
 from typing import List, Dict, Optional
 import psutil
 import os
 
-from config import SESSION_FILE, RESTORE_CONFIG_FILE
+from focus_mode_app.config import SESSION_FILE, RESTORE_CONFIG_FILE
 
 
 class SessionTracker:

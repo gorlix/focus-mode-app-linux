@@ -5,24 +5,17 @@ Interfaccia command-line per gestire app bloccate, sessioni, restore e focus loc
 Supporta sia timer countdown che target time per il focus lock.
 """
 
-import sys
-from typing import Optional
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
 from rich import box
 
-from core.storage import (
-    blocked_items,
-    load_blocked_items,
-    save_blocked_items,
+from focus_mode_app.core.storage import (
     add_blocked_item,
     remove_blocked_item,
-    get_blocked_items,
-    get_blocked_apps,
-    get_blocked_webapps
+    get_blocked_items
 )
-from core.blocker import (
+from focus_mode_app.core.blocker import (
     is_blocking_active,
     set_blocking_active,
     toggle_blocking,
@@ -105,7 +98,7 @@ def cmd_list_restore():
     Mostra quali app verranno ripristinate quando il blocco viene disattivato.
     """
     try:
-        from core.session import session_tracker
+        from focus_mode_app.core.session import session_tracker
 
         restore_list = session_tracker.restore_list
 
@@ -208,7 +201,7 @@ def cmd_stop():
         console.print("\n[yellow]ℹ️  Il blocco è già disattivo[/]\n")
         return
 
-    from core.blocker import can_disable_blocking
+    from focus_mode_app.core.blocker import can_disable_blocking
 
     can_disable, reason = can_disable_blocking()
     if not can_disable:
@@ -219,8 +212,8 @@ def cmd_stop():
     console.print("\n[red]🔓 Blocco DISATTIVATO[/]\n")
 
     try:
-        from core.session import session_tracker
-        from core.notifications import notify_restore_complete
+        from focus_mode_app.core.session import session_tracker
+        from focus_mode_app.core.notifications import notify_restore_complete
 
         killed_apps = session_tracker.get_killed_apps()
 
@@ -238,7 +231,7 @@ def cmd_toggle():
     Controlla focus lock prima di disattivare.
     """
     if is_blocking_active():
-        from core.blocker import can_disable_blocking
+        from focus_mode_app.core.blocker import can_disable_blocking
 
         can_disable, reason = can_disable_blocking()
         if not can_disable:
@@ -266,7 +259,7 @@ def cmd_add_restore(app_name: str):
         app_name: Nome app da aggiungere a restore
     """
     try:
-        from core.session import session_tracker
+        from focus_mode_app.core.session import session_tracker
 
         session_tracker.add_to_restore(app_name)
         console.print(f"\n[green]✅ '{app_name}' aggiunto a auto-restore![/]\n")
@@ -282,7 +275,7 @@ def cmd_remove_restore(app_name: str):
         app_name: Nome app da rimuovere da restore
     """
     try:
-        from core.session import session_tracker
+        from focus_mode_app.core.session import session_tracker
 
         session_tracker.remove_from_restore(app_name)
         console.print(f"\n[green]✅ '{app_name}' rimosso da auto-restore![/]\n")
@@ -296,8 +289,8 @@ def cmd_restore():
     Utile per forzare il restore senza aspettare la disattivazione del blocco.
     """
     try:
-        from core.restore import restore_all_apps
-        from core.session import session_tracker
+        from focus_mode_app.core.restore import restore_all_apps
+        from focus_mode_app.core.session import session_tracker
 
         apps = session_tracker.get_killed_apps()
 
@@ -339,7 +332,7 @@ def cmd_set_timer(minutes: int):
         minutes: Durata timer in minuti
     """
     try:
-        from core.focus_lock import focus_lock
+        from focus_mode_app.core.focus_lock import focus_lock
 
         if focus_lock.set_timer_lock(minutes):
             console.print(f"\n[green]🔒 Focus Lock attivato: {minutes} minuti[/]\n")
@@ -363,7 +356,7 @@ def cmd_set_target_time(hour: int, minute: int):
         minute: Minuto target (0-59)
     """
     try:
-        from core.focus_lock import focus_lock
+        from focus_mode_app.core.focus_lock import focus_lock
 
         if not (0 <= hour <= 23 and 0 <= minute <= 59):
             console.print("\n[red]❌ Ora non valida (HH: 0-23, MM: 0-59)[/]\n")
@@ -384,7 +377,7 @@ def cmd_set_target_time(hour: int, minute: int):
 def cmd_lock_status():
     """Mostra stato focus lock con countdown e dettagli."""
     try:
-        from core.focus_lock import focus_lock
+        from focus_mode_app.core.focus_lock import focus_lock
 
         info = focus_lock.get_lock_info()
 
@@ -418,7 +411,7 @@ def cmd_clear_lock():
     Richiede conferma dell'utente.
     """
     try:
-        from core.focus_lock import focus_lock
+        from focus_mode_app.core.focus_lock import focus_lock
         from rich.prompt import Confirm
 
         if not focus_lock.is_locked():
@@ -451,7 +444,7 @@ def cmd_clear():
     from rich.prompt import Confirm
 
     if Confirm.ask("\n[red]⚠️  Rimuovere TUTTI gli elementi?[/]"):
-        from core.storage import clear_blocked_items
+        from focus_mode_app.core.storage import clear_blocked_items
         clear_blocked_items()
         console.print("\n[green]✅ Lista svuotata![/]\n")
     else:

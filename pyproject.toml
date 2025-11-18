@@ -1,0 +1,44 @@
+[build-system]
+requires = ["setuptools>=65.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "focus-mode-app"
+version = "1.0.2"
+description = "Focus Mode App - Linux app blocker for Wayland"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Alessandro Gorla (gorlix)", email = "ale.gorla2002@gmail.com"}
+]
+
+keywords = ["focus", "blocker", "productivity", "linux", "wayland"]
+
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    "psutil>=5.8.0",
+    "ttkbootstrap>=1.6.0",
+    "Pillow>=9.0.0",
+    "PyQt6>=6.0.0",
+    "rich>=13.0.0",
+]
+
+[project.scripts]
+focus-mode-app = "focus_mode_app.main:main"
+study-mode = "focus_mode_app.cli:main"
+
+[project.urls]
+"Homepage" = "https://github.com/gorlix/focus-mode-app-linux"
+"Bug Tracker" = "https://github.com/gorlix/focus-mode-app-linux/issues"
+"Source Code" = "https://github.com/gorlix/focus-mode-app-linux"

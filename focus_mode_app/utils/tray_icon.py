@@ -14,9 +14,9 @@ except ImportError:
     print("[ERROR] PyQt6 non installato: pip install PyQt6")
     sys.exit(1)
 
-from config import TRAY_ID, TRAY_TOOLTIP
-from core.blocker import is_blocking_active, toggle_blocking
-from core.storage import save_blocked_items
+from focus_mode_app.config import TRAY_TOOLTIP
+from focus_mode_app.core.blocker import is_blocking_active, toggle_blocking
+from focus_mode_app.core.storage import save_blocked_items
 
 # Riferimenti globali
 _tray_icon = None
