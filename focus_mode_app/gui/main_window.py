@@ -1,15 +1,28 @@
 """
 gui/main_window.py
-Finestra principale dell'applicazione Focus Mode App.
-Gestisce l'interfaccia utente per configurare app e webapp da bloccare.
-Integra pannello di gestione app da ripristinare automaticamente.
-Integra focus lock timer e target time per impedire disattivazione prematura.
+Focus Mode App - KivyMD Material You 3 UI
+Compatible with KivyMD 1.x - Fixed Layout
 """
 
-from tkinter import messagebox
-import ttkbootstrap as ttk
+from kivymd.app import MDApp
+from kivymd.uix.screen import MDScreen
+from kivymd.uix.list import OneLineAvatarIconListItem, IconLeftWidget, IRightBodyTouch, MDList
+from kivymd.uix.dialog import MDDialog
+from kivymd.uix.button import MDFlatButton, MDRaisedButton, MDIconButton, MDFillRoundFlatButton, MDFillRoundFlatIconButton
+from kivymd.uix.card import MDCard
+from kivymd.uix.label import MDLabel, MDIcon
+from kivymd.uix.textfield import MDTextField
+from kivymd.uix.selectioncontrol import MDSwitch, MDCheckbox
+from kivymd.uix.boxlayout import MDBoxLayout
+from kivymd.uix.gridlayout import MDGridLayout
+from kivy.uix.scrollview import ScrollView
+from kivy.clock import Clock
+from kivy.metrics import dp
+from kivy.core.window import Window
+from kivy.animation import Animation
+from kivy.utils import get_color_from_hex
 
-from focus_mode_app.config import WINDOW_WIDTH, WINDOW_HEIGHT, GUI_THEME, APP_TITLE
+from focus_mode_app.config import APP_TITLE
 from focus_mode_app.core.blocker import (
     is_blocking_active,
     toggle_blocking,
@@ -22,637 +35,747 @@ from focus_mode_app.core.storage import (
     remove_blocked_item,
     get_blocked_items
 )
-from focus_mode_app.utils.tray_icon import update_tray_menu
-from focus_mode_app.gui.material_theme import (
-    apply_material3_style,
-    material_label,
-    material_entry,
-    material_button,
-    material_listbox,
-    create_card_frame,
-    set_window_center,
-    MaterialColors
-)
+from focus_mode_app.gui.material_theme import MaterialYouColors
 
 
-class AppGui(ttk.Window):
-    """
-    Finestra principale dell'applicazione Focus Mode App.
-    Gestisce l'interfaccia utente per configurare app e webapp da bloccare.
-    Include pannello di gestione app da ripristinare.
-    Include focus lock timer e target time per sessioni concentrate.
-    """
+class FocusModeScreen(MDScreen):
+    """Main screen for Focus Mode App"""
+    pass
 
-    def __init__(self):
-        """Inizializza la finestra principale con tema e layout Material 3."""
-        super().__init__(themename=GUI_THEME)
 
-        self.title(APP_TITLE)
+class RightContainer(IRightBodyTouch, MDBoxLayout):
+    """Custom right container for list items"""
+    adaptive_width = True
 
-        set_window_center(self, WINDOW_WIDTH, WINDOW_HEIGHT)
 
-        apply_material3_style(self)
+class FocusModeApp(MDApp):
+    """Focus Mode App - KivyMD Material You 3"""
 
-        self._create_widgets()
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.title = APP_TITLE
 
-        self.refresh_list()
+        # State
+        self.lock_mode = "timer"
+        self.item_type = "app"
+        self.selected_blocked_index = None
+        
+        # Dialog reference
+        self.current_dialog = None
 
-        self.protocol("WM_DELETE_WINDOW", self.hide_window)
+        # Widget references
+        self.timer_input_layout = None
+        self.target_input_layout = None
+        self.colors = MaterialYouColors.DEFAULT_COLORS
 
-    # ========================================================================
-    # CREAZIONE INTERFACCIA
-    # ========================================================================
+    def build(self):
+        """Build the app UI programmatically"""
+        # Set window size
+        Window.size = (980, 900)
+        
+        # Configure theme
+        self.theme_cls.theme_style = "Dark"
+        self.theme_cls.primary_palette = "DeepPurple"
+        self.theme_cls.material_style = "M3"
+        
+        # Load Material You colors
+        self._load_material_you_colors()
+        
+        # Set background color
+        Window.clearcolor = get_color_from_hex(self.colors["background"])
 
-    def _create_widgets(self):
-        """Crea tutti i widget dell'interfaccia principale."""
-        main_frame = create_card_frame(self, padx=24, pady=24)
+        # Create main screen
+        screen = FocusModeScreen()
+        screen.md_bg_color = get_color_from_hex(self.colors["background"])
 
-        self._create_title(main_frame)
-        self._create_toggle_button(main_frame)
-        self._create_timer_panel(main_frame)
-        self._create_restore_panel(main_frame)
-        self._create_blocked_section(main_frame)
-        self._create_feedback_label(main_frame)
-        self._create_action_buttons(main_frame)
-
-    def _create_title(self, parent):
-        """Crea il titolo principale dell'interfaccia."""
-        title = material_label(parent, "Focus Mode App", style_type="title")
-        title.pack(pady=(0, 10))
-
-    def _create_toggle_button(self, parent):
-        """Crea il bottone toggle per attivare/disattivare il blocco."""
-        self.toggle_btn = ttk.Button(
-            parent,
-            text="ATTIVA MODALITÀ STUDIO",
-            command=self.toggle_blocking,
-            bootstyle="success-outline",
-            width=30
+        # Create scrollable content
+        scroll = ScrollView(do_scroll_x=False, do_scroll_y=True, bar_width=dp(8))
+        
+        # Main container
+        main_layout = MDGridLayout(
+            cols=1,
+            size_hint_y=None,
+            padding=[dp(24), dp(24)],
+            spacing=dp(24),
+            md_bg_color=get_color_from_hex(self.colors["background"])
         )
-        self.toggle_btn.pack(pady=(0, 20))
+        main_layout.bind(minimum_height=main_layout.setter('height'))
 
-    def _create_timer_panel(self, parent):
-        """
-        Crea pannello timer/target time per focus lock.
-        Permette di impostare timer countdown o ora target.
-        """
-        timer_frame = ttk.LabelFrame(
-            parent,
-            text="FOCUS LOCK",
-            bootstyle="warning",
-            padding=16
+        # Add all sections
+        main_layout.add_widget(self._create_header())
+        main_layout.add_widget(self._create_toggle_button())
+        
+        # Cards container
+        cards_layout = MDGridLayout(
+            cols=1,
+            spacing=dp(24),
+            size_hint_y=None
         )
-        timer_frame.pack(fill="x", pady=(0, 16))
+        cards_layout.bind(minimum_height=cards_layout.setter('height'))
+        
+        cards_layout.add_widget(self._create_focus_lock_card())
+        # Merged Blocked & Restore Card
+        cards_layout.add_widget(self._create_blocked_card())
+        
+        main_layout.add_widget(cards_layout)
 
-        # Radio buttons per scegliere modalità
-        mode_frame = ttk.Frame(timer_frame)
-        mode_frame.pack(fill="x", pady=(0, 8))
+        scroll.add_widget(main_layout)
+        screen.add_widget(scroll)
 
-        self.lock_mode = ttk.StringVar(value="timer")
+        # Schedule updates
+        Clock.schedule_once(lambda dt: self.update_toggle_button(), 0.5)
+        Clock.schedule_once(lambda dt: self.refresh_blocked_list(), 0.5)
+        Clock.schedule_interval(self._update_timer_display, 1)
 
-        radio_timer = ttk.Radiobutton(
-            mode_frame,
-            text="⏲️ Timer (minuti)",
-            variable=self.lock_mode,
-            value="timer",
-            bootstyle="warning",
-            command=self.update_lock_input_visibility
+        return screen
+
+    def _load_material_you_colors(self):
+        """Load Material You colors"""
+        try:
+            plasma_colors = MaterialYouColors.get_plasma_colors()
+            if plasma_colors:
+                self.colors = plasma_colors
+        except:
+            pass
+
+    def _create_header(self):
+        """Create header"""
+        layout = MDBoxLayout(orientation='vertical', size_hint_y=None, spacing=dp(8), padding=[0, 0, 0, dp(16)])
+        layout.bind(minimum_height=layout.setter('height'))
+
+        title_box = MDBoxLayout(orientation='horizontal', size_hint_y=None, height=dp(64), spacing=dp(16))
+        
+        icon_label = MDIcon(
+            icon="target",
+            theme_text_color="Custom",
+            text_color=get_color_from_hex(self.colors["primary"]),
+            size_hint=(None, None),
+            size=(dp(64), dp(64)),
+            halign="center",
+            font_size="48sp"
         )
-        radio_timer.pack(side="left", padx=(0, 16))
-
-        radio_target = ttk.Radiobutton(
-            mode_frame,
-            text="🕐 Fino alle ore",
-            variable=self.lock_mode,
-            value="target",
-            bootstyle="warning",
-            command=self.update_lock_input_visibility
+        
+        title = MDLabel(
+            text="Focus Mode",
+            font_style="H3",
+            theme_text_color="Custom",
+            text_color=get_color_from_hex(self.colors["on_background"]),
+            size_hint_y=None,
+            height=dp(64),
+            valign="center"
         )
-        radio_target.pack(side="left")
+        
+        title_box.add_widget(icon_label)
+        title_box.add_widget(title)
 
-        # Frame timer input
-        self.timer_input_frame = ttk.Frame(timer_frame)
-        self.timer_input_frame.pack(fill="x", pady=(0, 8))
-
-        ttk.Label(self.timer_input_frame, text="Minuti:").pack(side="left", padx=(0, 8))
-
-        self.timer_entry = ttk.Entry(self.timer_input_frame, width=10)
-        self.timer_entry.pack(side="left", padx=(0, 8))
-        self.timer_entry.insert(0, "25")
-
-        # Frame target time input
-        self.target_input_frame = ttk.Frame(timer_frame)
-
-        ttk.Label(self.target_input_frame, text="Ora:").pack(side="left", padx=(0, 8))
-
-        self.target_hour_entry = ttk.Entry(self.target_input_frame, width=5)
-        self.target_hour_entry.pack(side="left", padx=(0, 4))
-        self.target_hour_entry.insert(0, "14")
-
-        ttk.Label(self.target_input_frame, text=":").pack(side="left", padx=2)
-
-        self.target_minute_entry = ttk.Entry(self.target_input_frame, width=5)
-        self.target_minute_entry.pack(side="left", padx=(4, 8))
-        self.target_minute_entry.insert(0, "30")
-
-        ttk.Label(self.target_input_frame, text="(HH:MM)").pack(side="left", padx=(0, 8))
-
-        # Bottone attiva lock
-        self.btn_activate_lock = material_button(
-            timer_frame,
-            "Attiva Lock",
-            self.activate_lock,
-            button_type="warning"
+        subtitle = MDLabel(
+            text="Blocca le distrazioni e mantieni la concentrazione",
+            font_style="Body1",
+            theme_text_color="Custom",
+            text_color=get_color_from_hex(self.colors["on_surface_variant"]),
+            size_hint_y=None,
+            height=dp(24)
         )
-        self.btn_activate_lock.pack(fill="x", pady=(0, 8))
+
+        layout.add_widget(title_box)
+        layout.add_widget(subtitle)
+
+        return layout
+
+    def _create_toggle_button(self):
+        """Create main toggle button"""
+        self.toggle_btn = MDFillRoundFlatIconButton(
+            text="ATTIVA FOCUS MODE",
+            icon="lock-open",
+            font_size="18sp",
+            size_hint=(1, None),
+            height=dp(64),
+            on_release=lambda x: self.toggle_blocking()
+        )
+        return self.toggle_btn
+
+    def _create_card_base(self, height=None):
+        """Create a base card with Material 3 styling"""
+        card = MDCard(
+            orientation='vertical',
+            padding=dp(24),
+            spacing=dp(16),
+            size_hint_y=None,
+            radius=[dp(16)],
+            elevation=1,
+            md_bg_color=get_color_from_hex(self.colors["surface_container"])
+        )
+        if height:
+            card.height = height
+        else:
+            card.bind(minimum_height=card.setter('height'))
+        return card
+
+    def _create_section_title(self, text, icon=""):
+        """Create a section title"""
+        box = MDBoxLayout(orientation='horizontal', size_hint_y=None, height=dp(32), spacing=dp(12))
+        if icon:
+            lbl_icon = MDIcon(
+                icon=icon, 
+                size_hint=(None, None), 
+                size=(dp(24), dp(32)), 
+                theme_text_color="Custom",
+                text_color=get_color_from_hex(self.colors["primary"]),
+                font_size="24sp"
+            )
+            box.add_widget(lbl_icon)
+            
+        lbl = MDLabel(
+            text=text,
+            font_style="H6",
+            theme_text_color="Custom",
+            text_color=get_color_from_hex(self.colors["on_surface"])
+        )
+        box.add_widget(lbl)
+        return box
+
+    def _create_focus_lock_card(self):
+        """Create focus lock card"""
+        card = self._create_card_base()
+
+        # Title
+        card.add_widget(self._create_section_title("Focus Lock Timer", "timer"))
+
+        # Description
+        desc = MDLabel(
+            text="Blocca temporaneamente il focus mode per evitare distrazioni impulsive.",
+            font_style="Body2",
+            theme_text_color="Custom",
+            text_color=get_color_from_hex(self.colors["on_surface_variant"]),
+            size_hint_y=None,
+            height=dp(40)
+        )
+        card.add_widget(desc)
+
+        # Mode buttons
+        mode_layout = MDBoxLayout(size_hint=(1, None), height=dp(48), spacing=dp(12))
+
+        timer_btn = MDFillRoundFlatIconButton(
+            text="Timer",
+            icon="timer",
+            on_release=lambda x: self.set_lock_mode("timer"),
+            md_bg_color=get_color_from_hex(self.colors["primary_container"]),
+            text_color=get_color_from_hex(self.colors["on_primary_container"]),
+        )
+        target_btn = MDFillRoundFlatIconButton(
+            text="Target",
+            icon="clock-time-four",
+            on_release=lambda x: self.set_lock_mode("target"),
+            md_bg_color=get_color_from_hex(self.colors["surface_container_highest"]),
+            text_color=get_color_from_hex(self.colors["on_surface_variant"]),
+        )
+        
+        self.mode_timer_btn = timer_btn
+        self.mode_target_btn = target_btn
+
+        mode_layout.add_widget(timer_btn)
+        mode_layout.add_widget(target_btn)
+        card.add_widget(mode_layout)
+
+        # Timer input
+        self.timer_input_layout = MDBoxLayout(
+            orientation='vertical',
+            size_hint_y=None,
+            height=dp(80),
+            spacing=dp(8)
+        )
+
+        timer_label = MDLabel(
+            text="Durata (minuti)",
+            font_style="Caption",
+            theme_text_color="Custom",
+            text_color=get_color_from_hex(self.colors["on_surface_variant"]),
+            size_hint_y=None,
+            height=dp(20)
+        )
+
+        self.timer_entry = MDTextField(
+            hint_text="25",
+            text="25",
+            mode="fill",
+            fill_color_normal=get_color_from_hex(self.colors["surface_container_highest"]),
+            line_color_focus=get_color_from_hex(self.colors["primary"]),
+            size_hint=(None, None),
+            size=(dp(150), dp(50))
+        )
+
+        self.timer_input_layout.add_widget(timer_label)
+        self.timer_input_layout.add_widget(self.timer_entry)
+        card.add_widget(self.timer_input_layout)
+
+        # Target input (hidden initially)
+        self.target_input_layout = MDBoxLayout(
+            orientation='vertical',
+            size_hint_y=None,
+            height=0,
+            spacing=dp(8),
+            opacity=0
+        )
+
+        target_label = MDLabel(
+            text="Orario di sblocco (HH:MM)",
+            font_style="Caption",
+            theme_text_color="Custom",
+            text_color=get_color_from_hex(self.colors["on_surface_variant"]),
+            size_hint_y=None,
+            height=dp(20)
+        )
+
+        target_row = MDBoxLayout(size_hint=(None, None), size=(dp(200), dp(50)), spacing=dp(12))
+
+        self.hour_entry = MDTextField(
+            hint_text="14", text="14", 
+            mode="fill",
+            fill_color_normal=get_color_from_hex(self.colors["surface_container_highest"]),
+            size_hint=(None, None), size=(dp(80), dp(50))
+        )
+        colon = MDLabel(text=":", font_style="H5", size_hint=(None, None), size=(dp(20), dp(50)), halign="center")
+        self.minute_entry = MDTextField(
+            hint_text="30", text="30", 
+            mode="fill",
+            fill_color_normal=get_color_from_hex(self.colors["surface_container_highest"]),
+            size_hint=(None, None), size=(dp(80), dp(50))
+        )
+
+        target_row.add_widget(self.hour_entry)
+        target_row.add_widget(colon)
+        target_row.add_widget(self.minute_entry)
+
+        self.target_input_layout.add_widget(target_label)
+        self.target_input_layout.add_widget(target_row)
+        card.add_widget(self.target_input_layout)
+
+        # Activate button
+        activate_btn = MDFillRoundFlatIconButton(
+            text="Attiva Lock",
+            icon="lock",
+            size_hint=(1, None),
+            height=dp(48),
+            on_release=lambda x: self.activate_lock()
+        )
+        card.add_widget(activate_btn)
 
         # Status label
-        self.timer_status_label = ttk.Label(
-            timer_frame,
+        self.status_label = MDLabel(
             text="Nessun lock attivo",
-            font=("Roboto", 11, "bold"),
-            foreground="gray"
+            font_style="Body2",
+            theme_text_color="Custom",
+            text_color=get_color_from_hex(self.colors["outline"]),
+            halign="center",
+            size_hint_y=None,
+            height=dp(30)
         )
-        self.timer_status_label.pack()
+        card.add_widget(self.status_label)
 
-        # Imposta visibilità iniziale
-        self.update_lock_input_visibility()
+        return card
 
-        # Avvia update loop
-        self.update_timer_display()
+    def _create_blocked_card(self):
+        """Create blocked items card with integrated restore controls"""
+        card = self._create_card_base()
 
-    def update_lock_input_visibility(self):
-        """Mostra/nasconde input in base alla modalità selezionata."""
-        if self.lock_mode.get() == "timer":
-            self.timer_input_frame.pack(fill="x", pady=(0, 8))
-            self.target_input_frame.pack_forget()
+        # Title
+        card.add_widget(self._create_section_title("Gestione Blocchi & Restore", "shield-check"))
+
+        # Type buttons
+        type_layout = MDBoxLayout(size_hint=(None, None), size=(dp(300), dp(48)), spacing=dp(12))
+
+        app_btn = MDFillRoundFlatIconButton(
+            text="App", 
+            icon="cellphone",
+            on_release=lambda x: self.set_item_type("app"),
+            md_bg_color=get_color_from_hex(self.colors["primary_container"]),
+            text_color=get_color_from_hex(self.colors["on_primary_container"]),
+        )
+        web_btn = MDFillRoundFlatIconButton(
+            text="Web", 
+            icon="web",
+            on_release=lambda x: self.set_item_type("webapp"),
+            md_bg_color=get_color_from_hex(self.colors["surface_container_highest"]),
+            text_color=get_color_from_hex(self.colors["on_surface_variant"]),
+        )
+        
+        self.type_app_btn = app_btn
+        self.type_web_btn = web_btn
+
+        type_layout.add_widget(app_btn)
+        type_layout.add_widget(web_btn)
+        card.add_widget(type_layout)
+
+        # Description
+        self.item_desc_label = MDLabel(
+            text="Inserisci il nome dell'eseguibile (es: firefox, telegram)",
+            font_style="Caption",
+            theme_text_color="Custom",
+            text_color=get_color_from_hex(self.colors["on_surface_variant"]),
+            size_hint_y=None,
+            height=dp(24)
+        )
+        card.add_widget(self.item_desc_label)
+
+        # Input row
+        input_layout = MDBoxLayout(size_hint=(1, None), height=dp(56), spacing=dp(12))
+
+        self.item_entry = MDTextField(
+            hint_text="Nome elemento",
+            mode="fill",
+            fill_color_normal=get_color_from_hex(self.colors["surface_container_highest"]),
+            size_hint=(1, None),
+            height=dp(56)
+        )
+        add_btn = MDIconButton(
+            icon="plus",
+            theme_icon_color="Custom",
+            icon_color=get_color_from_hex(self.colors["primary"]),
+            on_release=lambda x: self.add_item()
+        )
+
+        input_layout.add_widget(self.item_entry)
+        input_layout.add_widget(add_btn)
+        card.add_widget(input_layout)
+
+        # Table Header
+        card.add_widget(self._create_blocked_list_header())
+
+        # List
+        scroll = ScrollView(size_hint=(1, None), height=dp(300))
+        self.blocked_list_container = MDList(spacing=dp(8), padding=[0, dp(8)])
+        scroll.add_widget(self.blocked_list_container)
+        card.add_widget(scroll)
+
+        # Global Restore Switch (moved from restore card)
+        switch_layout = MDBoxLayout(size_hint=(1, None), height=dp(48), spacing=dp(12))
+
+        switch_label = MDLabel(
+            text="Abilita Auto-Restore Globale", 
+            font_style="Body1", 
+            theme_text_color="Custom",
+            text_color=get_color_from_hex(self.colors["on_surface"]),
+            size_hint_y=None,
+            height=dp(48),
+            valign="center"
+        )
+
+        self.restore_switch = MDSwitch()
+        self.restore_switch.active = is_restore_enabled()
+        self.restore_switch.bind(active=lambda x, v: self.toggle_restore(v))
+        self.restore_switch.size_hint = (None, None)
+        self.restore_switch.height = dp(48)
+
+        switch_layout.add_widget(switch_label)
+        switch_layout.add_widget(self.restore_switch)
+        card.add_widget(switch_layout)
+
+        return card
+
+    def _create_blocked_list_header(self):
+        """Create header for the blocked items list (Table style)"""
+        header = MDBoxLayout(
+            orientation='horizontal',
+            size_hint_y=None,
+            height=dp(40),
+            padding=[dp(16), 0],
+            spacing=dp(8),
+            md_bg_color=get_color_from_hex(self.colors["surface_container_highest"]),
+            radius=[dp(8)]
+        )
+        
+        # Column 1: Name
+        header.add_widget(MDLabel(
+            text="Elemento",
+            font_style="Subtitle2",
+            theme_text_color="Custom",
+            text_color=get_color_from_hex(self.colors["on_surface_variant"]),
+            size_hint_x=0.5,
+            valign="center"
+        ))
+        
+        # Column 2: Auto-Restore
+        header.add_widget(MDLabel(
+            text="Auto-Restore",
+            font_style="Subtitle2",
+            theme_text_color="Custom",
+            text_color=get_color_from_hex(self.colors["on_surface_variant"]),
+            size_hint_x=0.3,
+            halign="center",
+            valign="center"
+        ))
+        
+        # Column 3: Actions
+        header.add_widget(MDLabel(
+            text="Elimina",
+            font_style="Subtitle2",
+            theme_text_color="Custom",
+            text_color=get_color_from_hex(self.colors["on_surface_variant"]),
+            size_hint_x=0.2,
+            halign="center",
+            valign="center"
+        ))
+        
+        return header
+
+    # ========================================================================
+    # LOGIC METHODS
+    # ========================================================================
+
+    def set_lock_mode(self, mode):
+        """Set lock mode"""
+        self.lock_mode = mode
+
+        if mode == "timer":
+            Animation(opacity=1, height=dp(80), duration=0.3).start(self.timer_input_layout)
+            Animation(opacity=0, height=0, duration=0.3).start(self.target_input_layout)
+            
+            self.mode_timer_btn.md_bg_color = get_color_from_hex(self.colors["primary_container"])
+            self.mode_timer_btn.text_color = get_color_from_hex(self.colors["on_primary_container"])
+            self.mode_target_btn.md_bg_color = get_color_from_hex(self.colors["surface_container_highest"])
+            self.mode_target_btn.text_color = get_color_from_hex(self.colors["on_surface_variant"])
         else:
-            self.timer_input_frame.pack_forget()
-            self.target_input_frame.pack(fill="x", pady=(0, 8))
+            Animation(opacity=0, height=0, duration=0.3).start(self.timer_input_layout)
+            Animation(opacity=1, height=dp(80), duration=0.3).start(self.target_input_layout)
+            
+            self.mode_timer_btn.md_bg_color = get_color_from_hex(self.colors["surface_container_highest"])
+            self.mode_timer_btn.text_color = get_color_from_hex(self.colors["on_surface_variant"])
+            self.mode_target_btn.md_bg_color = get_color_from_hex(self.colors["primary_container"])
+            self.mode_target_btn.text_color = get_color_from_hex(self.colors["on_primary_container"])
 
     def activate_lock(self):
-        """Attiva focus lock in modalità timer o target time."""
+        """Activate lock"""
         try:
             from focus_mode_app.core.focus_lock import focus_lock
 
-            mode = self.lock_mode.get()
-
-            if mode == "timer":
-                minutes = int(self.timer_entry.get())
-
-                if minutes <= 0:
-                    self.show_feedback("Inserisci minuti > 0")
-                    return
-
-                if focus_lock.set_timer_lock(minutes):
-                    self.show_feedback(f"Timer Lock attivato: {minutes} min")
-                else:
-                    self.show_feedback("Errore attivazione timer")
-                    return
-
+            if self.lock_mode == "timer":
+                minutes = int(self.timer_entry.text or "25")
+                if minutes > 0 and focus_lock.set_timer_lock(minutes):
+                    self.show_dialog("Success", f"Timer: {minutes} min")
+                    if not is_blocking_active():
+                        toggle_blocking()
+                        self.update_toggle_button()
             else:
-                hour = int(self.target_hour_entry.get())
-                minute = int(self.target_minute_entry.get())
-
-                if not (0 <= hour <= 23 and 0 <= minute <= 59):
-                    self.show_feedback("Ora non valida (HH: 0-23, MM: 0-59)")
-                    return
-
-                if focus_lock.set_target_time_lock(hour, minute):
-                    self.show_feedback(f"Target Time Lock: {hour:02d}:{minute:02d}")
-                else:
-                    self.show_feedback("Errore attivazione target time")
-                    return
-
-            if not is_blocking_active():
-                toggle_blocking()
-                self.update_toggle_button()
-
-        except ValueError:
-            self.show_feedback("Inserisci valori numerici validi")
+                hour = int(self.hour_entry.text or "14")
+                minute = int(self.minute_entry.text or "30")
+                if 0 <= hour <= 23 and 0 <= minute <= 59:
+                    if focus_lock.set_target_time_lock(hour, minute):
+                        self.show_dialog("Success", f"Target: {hour:02d}:{minute:02d}")
+                        if not is_blocking_active():
+                            toggle_blocking()
+                            self.update_toggle_button()
         except Exception as e:
-            self.show_feedback(f"Errore: {e}")
+            self.show_dialog("Errore", str(e))
 
-    def update_timer_display(self):
-        """
-        Aggiorna display timer ogni secondo.
-        Mostra countdown e gestisce stato bottone disattiva.
-        """
+    def _update_timer_display(self, dt):
+        """Update timer display"""
         try:
             from focus_mode_app.core.focus_lock import focus_lock
-
             if focus_lock.is_locked():
                 info = focus_lock.get_lock_info()
-                self.timer_status_label.config(
-                    text=f"LOCKED - {info['remaining_time']} rimanenti",
-                    foreground="red"
-                )
-
-                if is_blocking_active():
-                    self.toggle_btn.config(state="disabled")
+                self.status_label.text = f"LOCKED - {info['remaining_time']}"
+                self.status_label.text_color = get_color_from_hex(self.colors["error"])
+                self.toggle_btn.disabled = True
             else:
-                self.timer_status_label.config(
-                    text="Nessun lock attivo",
-                    foreground="gray"
-                )
-
-                self.toggle_btn.config(state="normal")
-
-        except ImportError:
+                self.status_label.text = "Nessun lock attivo"
+                self.status_label.text_color = get_color_from_hex(self.colors["outline"])
+                self.toggle_btn.disabled = False
+        except:
             pass
-        except Exception as e:
-            print(f"[ERROR] Timer display update: {e}")
-
-        self.after(1000, self.update_timer_display)
-
-    def _create_restore_panel(self, parent):
-        """
-        Crea il pannello per gestire app da ripristinare automaticamente.
-        Permette all'utente di selezionare quali app ripristinare quando
-        il blocco viene disattivato.
-        """
-        restore_frame = ttk.LabelFrame(
-            parent,
-            text="AUTO-RESTORE ON DISABLE",
-            bootstyle="info",
-            padding=16
-        )
-        restore_frame.pack(fill="both", expand=False, pady=(0, 16))
-
-        self.restore_listbox = material_listbox(restore_frame, height=3)
-        self.restore_listbox.pack(fill="both", expand=True, pady=(0, 8))
-
-        restore_btn_frame = ttk.Frame(restore_frame)
-        restore_btn_frame.pack(fill="x", pady=(0, 8))
-
-        btn_add_restore = material_button(
-            restore_btn_frame,
-            "Add to Restore",
-            self.add_to_restore,
-            button_type="info"
-        )
-        btn_add_restore.pack(side="left", expand=True, fill="x", padx=(0, 4))
-
-        btn_remove_restore = ttk.Button(
-            restore_btn_frame,
-            text="Remove",
-            command=self.remove_from_restore,
-            bootstyle="danger"
-        )
-        btn_remove_restore.pack(side="right", expand=True, fill="x", padx=(4, 0))
-
-        self.restore_toggle_frame = ttk.Frame(restore_frame)
-        self.restore_toggle_frame.pack(fill="x")
-
-        self.restore_toggle_btn = ttk.Button(
-            self.restore_toggle_frame,
-            text="SOSPENDI AUTO-RESTORE",
-            command=self.toggle_restore_enabled,
-            bootstyle="warning-outline"
-        )
-        self.restore_toggle_btn.pack(fill="x")
-
-        self.refresh_restore_list()
-
-    def _create_blocked_section(self, parent):
-        """Crea la sezione per gestire elementi bloccati (app e webapp)."""
-        section = ttk.LabelFrame(
-            parent,
-            text="Elementi Bloccati",
-            bootstyle="primary",
-            padding=16
-        )
-        section.pack(fill="both", expand=True, pady=(0, 16))
-
-        self._create_type_selector(section)
-
-        self.desc_label = material_label(section, "")
-        self.desc_label.pack(anchor="w", pady=(0, 8))
-        self.update_description()
-
-        self.entry = material_entry(section)
-        self.entry.pack(fill="x", pady=(0, 8))
-
-        self._create_item_buttons(section)
-
-        self.listbox = material_listbox(section, height=6)
-        self.listbox.pack(fill="both", expand=True)
-
-    def _create_type_selector(self, parent):
-        """Crea i radio button per selezionare il tipo (app nativa o webapp)."""
-        radio_frame = ttk.Frame(parent)
-        radio_frame.pack(fill="x", pady=(0, 12))
-
-        self.item_type = ttk.StringVar(value="app")
-
-        radio_app = ttk.Radiobutton(
-            radio_frame,
-            text="App Nativa",
-            variable=self.item_type,
-            value="app",
-            bootstyle="primary"
-        )
-        radio_app.pack(side="left", padx=(0, 16))
-
-        radio_webapp = ttk.Radiobutton(
-            radio_frame,
-            text="Webapp",
-            variable=self.item_type,
-            value="webapp",
-            bootstyle="info"
-        )
-        radio_webapp.pack(side="left")
-
-        self.item_type.trace_add("write", lambda *args: self.update_description())
-
-    def _create_item_buttons(self, parent):
-        """Crea i bottoni per aggiungere e rimuovere elementi dalla lista."""
-        btn_frame = ttk.Frame(parent)
-        btn_frame.pack(fill="x", pady=(0, 8))
-
-        btn_add = material_button(
-            btn_frame,
-            "Aggiungi",
-            self.add_item,
-            button_type="primary"
-        )
-        btn_add.pack(side="left", expand=True, fill="x", padx=(0, 4))
-
-        btn_remove = ttk.Button(
-            btn_frame,
-            text="Rimuovi",
-            command=self.remove_item,
-            bootstyle="danger"
-        )
-        btn_remove.pack(side="right", expand=True, fill="x", padx=(4, 0))
-
-    def _create_feedback_label(self, parent):
-        """Crea il label per visualizzare messaggi di feedback temporanei."""
-        self.feedback_label = ttk.Label(
-            parent,
-            text="",
-            font=("Roboto", 11),
-            foreground=MaterialColors.PRIMARY,
-            background=MaterialColors.SURFACE
-        )
-        self.feedback_label.pack(pady=(8, 0))
-
-    def _create_action_buttons(self, parent):
-        """Crea i bottoni azioni principali (aggiorna, esci)."""
-        actions_frame = ttk.Frame(parent)
-        actions_frame.pack(fill="x", pady=(8, 0))
-
-        btn_refresh = material_button(
-            actions_frame,
-            "Aggiorna",
-            self.refresh_list,
-            button_type="secondary"
-        )
-        btn_refresh.pack(side="left", expand=True, fill="x", padx=(0, 4))
-
-        btn_quit = ttk.Button(
-            actions_frame,
-            text="Esci",
-            command=self.quit_app,
-            bootstyle="danger"
-        )
-        btn_quit.pack(side="right", expand=True, fill="x", padx=(4, 0))
-
-    # ========================================================================
-    # GESTIONE BLOCCO
-    # ========================================================================
 
     def toggle_blocking(self):
-        """
-        Attiva/disattiva il blocco e aggiorna l'interfaccia.
-        Gestisce anche il ripristino automatico alla disattivazione.
-        Controlla focus lock prima di disattivare.
-        """
+        """Toggle blocking"""
         if is_blocking_active():
             can_disable, reason = can_disable_blocking()
             if not can_disable:
-                self.show_feedback(f"{reason}")
+                self.show_dialog("Blocco Attivo", reason)
                 return
 
-        new_state = toggle_blocking()
+        toggle_blocking()
         self.update_toggle_button()
 
-        update_tray_menu()
-
     def update_toggle_button(self):
-        """Aggiorna il testo e lo stile del bottone toggle in base allo stato."""
+        """Update toggle button"""
         if is_blocking_active():
-            self.toggle_btn.config(
-                text="DISATTIVA MODALITÀ STUDIO",
-                bootstyle="danger"
-            )
-            self.show_feedback("Modalità Studio ATTIVATA - Le app verranno bloccate")
+            self.toggle_btn.text = "DISATTIVA FOCUS MODE"
+            self.toggle_btn.icon = "lock"
+            self.toggle_btn.md_bg_color = get_color_from_hex(self.colors["error"])
         else:
-            self.toggle_btn.config(
-                text="ATTIVA MODALITÀ STUDIO",
-                bootstyle="success-outline"
-            )
-            self.show_feedback("Modalità Studio DISATTIVATA - Nessun blocco attivo")
+            self.toggle_btn.text = "ATTIVA FOCUS MODE"
+            self.toggle_btn.icon = "lock-open"
+            self.toggle_btn.md_bg_color = get_color_from_hex(self.colors["primary"])
 
-    # ========================================================================
-    # GESTIONE RESTORE
-    # ========================================================================
-
-    def add_to_restore(self):
-        """
-        Aggiunge l'app selezionata dalla lista bloccati alla lista restore.
-        Usa get_blocked_items() per sincronizzazione corretta.
-        """
-        selection = self.listbox.curselection()
-        if not selection:
-            self.show_feedback("Seleziona un'app prima")
-            return
-
-        index = selection[0]
-        items = get_blocked_items()
-
-        if index >= len(items):
-            print(f"[ERROR] Index {index} out of range (len={len(items)})")
-            self.show_feedback("Errore: elemento non trovato")
-            self.refresh_list()
-            return
-
-        app_name = items[index]["name"]
-
-        try:
-            from focus_mode_app.core.session import session_tracker
-            session_tracker.add_to_restore(app_name)
-            self.refresh_restore_list()
-            self.show_feedback(f"{app_name} aggiunto a restore!")
-        except Exception as e:
-            print(f"[ERROR] Add to restore: {e}")
-            self.show_feedback(f"Errore: {e}")
-
-    def remove_from_restore(self):
-        """
-        Rimuove l'app selezionata dalla lista restore.
-        """
-        selection = self.restore_listbox.curselection()
-        if not selection:
-            self.show_feedback("Seleziona un'app prima")
-            return
-
-        try:
-            from focus_mode_app.core.session import session_tracker
-
-            app_names = list(session_tracker.restore_list.keys())
-            if selection[0] >= len(app_names):
-                self.show_feedback("Errore: elemento non trovato")
-                return
-
-            app_name = app_names[selection[0]]
-
-            session_tracker.remove_from_restore(app_name)
-            self.refresh_restore_list()
-            self.show_feedback(f"{app_name} rimosso da restore!")
-        except Exception as e:
-            print(f"[ERROR] Remove from restore: {e}")
-            self.show_feedback(f"Errore: {e}")
-
-    def refresh_restore_list(self):
-        """Aggiorna la listbox con le app da ripristinare."""
-        self.restore_listbox.delete(0, ttk.END)
-
-        try:
-            from focus_mode_app.core.session import session_tracker
-
-            for app_name in session_tracker.restore_list.keys():
-                self.restore_listbox.insert(ttk.END, f"{app_name}")
-        except Exception as e:
-            print(f"[ERROR] Refresh restore list: {e}")
-
-    def toggle_restore_enabled(self):
-        """
-        Toggle lo stato del restore automatico per la sessione corrente.
-        Permette all'utente di disabilitare il restore on-the-fly.
-        """
-        current_state = is_restore_enabled()
-        new_state = not current_state
-
-        set_restore_enabled(new_state)
-
-        if new_state:
-            self.restore_toggle_btn.config(
-                text="SOSPENDI AUTO-RESTORE",
-                bootstyle="warning-outline"
-            )
-            self.show_feedback("Auto-restore ABILITATO")
+    def set_item_type(self, item_type):
+        """Set item type"""
+        self.item_type = item_type
+        if item_type == "app":
+            self.item_desc_label.text = "Inserisci il nome dell'eseguibile (es: firefox)"
+            self.type_app_btn.md_bg_color = get_color_from_hex(self.colors["primary_container"])
+            self.type_app_btn.text_color = get_color_from_hex(self.colors["on_primary_container"])
+            self.type_web_btn.md_bg_color = get_color_from_hex(self.colors["surface_container_highest"])
+            self.type_web_btn.text_color = get_color_from_hex(self.colors["on_surface_variant"])
         else:
-            self.restore_toggle_btn.config(
-                text="ABILITA AUTO-RESTORE",
-                bootstyle="success-outline"
-            )
-            self.show_feedback("Auto-restore DISABILITATO")
-
-    # ========================================================================
-    # GESTIONE ELEMENTI BLOCCATI
-    # ========================================================================
-
-    def update_description(self):
-        """Aggiorna il testo descrittivo in base al tipo selezionato."""
-        if self.item_type.get() == "app":
-            self.desc_label.config(text="Nome eseguibile (es: firefox, telegram):")
-        else:
-            self.desc_label.config(text="URL o stringa comando (es: web.whatsapp.com):")
+            self.item_desc_label.text = "Inserisci URL o dominio (es: facebook.com)"
+            self.type_app_btn.md_bg_color = get_color_from_hex(self.colors["surface_container_highest"])
+            self.type_app_btn.text_color = get_color_from_hex(self.colors["on_surface_variant"])
+            self.type_web_btn.md_bg_color = get_color_from_hex(self.colors["primary_container"])
+            self.type_web_btn.text_color = get_color_from_hex(self.colors["on_primary_container"])
 
     def add_item(self):
-        """
-        Aggiunge un elemento alla lista bloccati.
-        Normalizza il nome e lo salva su disco.
-        """
-        name = self.entry.get().strip()
-        item_type = self.item_type.get()
+        """Add item"""
+        name = self.item_entry.text.strip()
+        if not name:
+            return
 
-        if item_type == "app":
+        if self.item_type == "app":
             name = name.lower()
 
-        if not name:
-            self.show_feedback("Inserisci un valore valido")
-            return
+        if add_blocked_item(name, self.item_type):
+            self.refresh_blocked_list()
+            self.item_entry.text = ""
+            self.show_dialog("Success", f"✓ {name} aggiunto")
 
-        if add_blocked_item(name, item_type):
-            self.listbox.insert(ttk.END, f"{name}")
-            self.show_feedback(f"{name} aggiunto e salvato!")
-            self.entry.delete(0, ttk.END)
-        else:
-            self.show_feedback("Elemento già presente o non valido")
-
-    def remove_item(self):
-        """
-        Rimuove l'elemento selezionato dalla lista bloccati.
-        Aggiorna sia la UI che lo storage persistente.
-        Usa get_blocked_items() per sincronizzazione corretta.
-        """
-        selection = self.listbox.curselection()
-        if not selection:
-            self.show_feedback("Seleziona un elemento da rimuovere")
-            return
-
-        index = selection[0]
+    def remove_item(self, index):
+        """Remove item by index"""
         items = get_blocked_items()
+        if index < len(items):
+            item_name = items[index]['name']
+            if remove_blocked_item(index):
+                # Also remove from restore if present
+                try:
+                    from focus_mode_app.core.session import session_tracker
+                    if item_name in session_tracker.restore_list:
+                        session_tracker.remove_from_restore(item_name)
+                except:
+                    pass
+                    
+                self.show_dialog("Success", f"✓ {item_name} rimosso")
+                self.refresh_blocked_list()
 
-        if index >= len(items):
-            self.show_feedback("Errore: elemento non trovato")
-            self.refresh_list()
-            return
+    def toggle_item_restore(self, item_name, active):
+        """Toggle restore for a specific item"""
+        try:
+            from focus_mode_app.core.session import session_tracker
+            if active:
+                session_tracker.add_to_restore(item_name)
+            else:
+                session_tracker.remove_from_restore(item_name)
+        except Exception as e:
+            self.show_dialog("Errore", str(e))
 
-        item_name = items[index]['name']
-
-        if remove_blocked_item(index):
-            self.listbox.delete(index)
-            self.show_feedback(f"{item_name} rimosso!")
-        else:
-            self.show_feedback("Errore durante la rimozione")
-
-    def refresh_list(self):
-        """
-        Aggiorna la listbox con tutti gli elementi salvati.
-        Sincronizza l'interfaccia con lo storage persistente.
-        Usa get_blocked_items() per dati sempre aggiornati.
-        """
-        self.listbox.delete(0, ttk.END)
-
+    def refresh_blocked_list(self):
+        """Refresh blocked list using custom table rows"""
+        self.blocked_list_container.clear_widgets()
         items = get_blocked_items()
+        
+        # Get current restore list
+        restore_list = []
+        try:
+            from focus_mode_app.core.session import session_tracker
+            restore_list = list(session_tracker.restore_list.keys())
+        except:
+            pass
 
-        for item in items:
-            self.listbox.insert(ttk.END, f"{item['name']}")
+        for idx, item in enumerate(items):
+            icon_name = "application" if item['type'] == "app" else "web"
+            item_name = item['name']
+            is_restored = item_name in restore_list
+            
+            # Create Row
+            row = MDBoxLayout(
+                orientation='horizontal',
+                size_hint_y=None,
+                height=dp(56),
+                padding=[dp(16), 0],
+                spacing=dp(8),
+                md_bg_color=get_color_from_hex(self.colors["surface_container"]),
+                radius=[dp(8)]
+            )
+            
+            # Col 1: Icon + Name (size_hint_x=0.5)
+            col1 = MDBoxLayout(orientation='horizontal', spacing=dp(12), size_hint_x=0.5)
+            
+            icon = MDIcon(
+                icon=icon_name,
+                theme_text_color="Custom",
+                text_color=get_color_from_hex(self.colors["primary"]),
+                size_hint=(None, None),
+                size=(dp(24), dp(24)),
+                pos_hint={'center_y': .5}
+            )
+            
+            name_label = MDLabel(
+                text=item_name,
+                theme_text_color="Custom",
+                text_color=get_color_from_hex(self.colors["on_surface"]),
+                valign="center",
+                shorten=True,
+                shorten_from='right'
+            )
+            
+            col1.add_widget(icon)
+            col1.add_widget(name_label)
+            row.add_widget(col1)
+            
+            # Col 2: Checkbox (size_hint_x=0.3)
+            col2 = MDBoxLayout(orientation='horizontal', size_hint_x=0.3)
+            col2.add_widget(MDBoxLayout(size_hint_x=1)) # spacer
+            
+            checkbox = MDCheckbox(
+                size_hint=(None, None),
+                size=(dp(40), dp(40)),
+                active=is_restored,
+                pos_hint={'center_y': .5},
+                selected_color=get_color_from_hex(self.colors["primary"]),
+                unselected_color=get_color_from_hex(self.colors["on_surface_variant"])
+            )
+            checkbox.bind(active=lambda x, v, name=item_name: self.toggle_item_restore(name, v))
+            
+            col2.add_widget(checkbox)
+            col2.add_widget(MDBoxLayout(size_hint_x=1)) # spacer
+            row.add_widget(col2)
+            
+            # Col 3: Delete Button (size_hint_x=0.2)
+            col3 = MDBoxLayout(orientation='horizontal', size_hint_x=0.2)
+            col3.add_widget(MDBoxLayout(size_hint_x=1)) # spacer
+            
+            delete_btn = MDIconButton(
+                icon="trash-can",
+                theme_text_color="Custom",
+                text_color=get_color_from_hex(self.colors["error"]),
+                size_hint=(None, None),
+                size=(dp(40), dp(40)),
+                pos_hint={'center_y': .5},
+                on_release=lambda x, i=idx: self.remove_item(i)
+            )
+            
+            col3.add_widget(delete_btn)
+            col3.add_widget(MDBoxLayout(size_hint_x=1)) # spacer
+            row.add_widget(col3)
+            
+            self.blocked_list_container.add_widget(row)
 
-        self.show_feedback(f"Elementi bloccati: {len(items)}")
+    def toggle_restore(self, active):
+        """Toggle global restore"""
+        set_restore_enabled(active)
 
-    # ========================================================================
-    # FEEDBACK E GESTIONE FINESTRA
-    # ========================================================================
+    def show_dialog(self, title, text):
+        """Show dialog"""
+        if self.current_dialog:
+            self.current_dialog.dismiss()
 
-    def show_feedback(self, message, duration=3000):
-        """
-        Mostra un messaggio di feedback temporaneo nella GUI.
-        Il messaggio scompare automaticamente dopo la durata specificata.
+        self.current_dialog = MDDialog(
+            title=title,
+            text=text,
+            buttons=[MDFlatButton(text="OK", on_release=lambda x: self.current_dialog.dismiss())]
+        )
+        self.current_dialog.open()
 
-        Args:
-            message: Testo del messaggio
-            duration: Durata in millisecondi (default 3000ms)
-        """
-        self.feedback_label.config(text=message)
-        self.after(duration, lambda: self.feedback_label.config(text=""))
 
-    def hide_window(self):
-        """
-        Nasconde la finestra principale (minimizza a tray).
-        L'applicazione continua a funzionare in background.
-        """
-        self.withdraw()
-        print("[INFO] Finestra nascosta")
+def run_app():
+    """Run the app"""
+    FocusModeApp().run()
 
-    def quit_app(self):
-        """
-        Chiude completamente l'applicazione con conferma.
-        Salva la configurazione prima di uscire.
-        """
-        if messagebox.askokcancel("Esci", "Vuoi uscire da Focus Mode App?"):
-            print("[INFO] Chiusura applicazione richiesta")
-            self.quit()
+
+if __name__ == "__main__":
+    run_app()
