@@ -12,8 +12,8 @@ class BlockedItem(BaseModel):
     """
     Representation of a single blocked target.
     """
-    name: str = Field(..., description="The name of the blocked app/website.", example="discord")
-    type: str = Field(..., description="The category type: 'app' or 'webapp'.", example="app")
+    name: str = Field(..., description="The name of the blocked app/website.", json_schema_extra={"example": "discord"})
+    type: str = Field(..., description="The category type: 'app' or 'webapp'.", json_schema_extra={"example": "app"})
 
 
 class LockInfo(BaseModel):
@@ -21,8 +21,8 @@ class LockInfo(BaseModel):
     Metadata concerning the current Focus Lock status.
     """
     locked: bool = Field(..., description="True if a focus lock prevents manual disabling.")
-    remaining_time: Optional[str] = Field(None, description="Time until the lock naturally expires.", example="15m 30s")
-    target_time: Optional[str] = Field(None, description="The absolute finish time of the lock.", example="15:30")
+    remaining_time: Optional[str] = Field(None, description="Time until the lock naturally expires.", json_schema_extra={"example": "15m 30s"})
+    target_time: Optional[str] = Field(None, description="The absolute finish time of the lock.", json_schema_extra={"example": "15:30"})
 
 
 class StateResponse(BaseModel):
