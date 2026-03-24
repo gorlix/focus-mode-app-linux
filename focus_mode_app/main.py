@@ -7,7 +7,6 @@ Integra session restore per il ripristino app automatico.
 
 import sys
 import threading
-import os
 import signal
 
 from focus_mode_app.config import load_config
@@ -16,6 +15,7 @@ from focus_mode_app.core.blocker import start_blocking_loop, set_blocking_active
 from focus_mode_app.core.session import session_tracker
 from focus_mode_app.gui.main_window import AppGui
 from focus_mode_app.utils.tray_icon import create_and_run_tray_icon, stop_tray_icon
+from focus_mode_app.api.launcher import start_api, stop_api
 
 
 _blocking_thread = None
@@ -26,14 +26,15 @@ _app_instance = None
 def cleanup_handlers():
     """Ferma i thread prima di uscire."""
     try:
+        stop_api()
         set_blocking_active(False)
 
         try:
             stop_tray_icon()
-        except:
+        except Exception:
             pass
 
-    except:
+    except Exception:
         pass
 
 
@@ -92,6 +93,8 @@ def main():
     # ========================================================================
     # MAINLOOP GUI
     # ========================================================================
+
+    start_api()
 
     try:
         _app_instance.mainloop()

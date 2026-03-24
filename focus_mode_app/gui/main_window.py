@@ -15,7 +15,8 @@ from focus_mode_app.core.blocker import (
     toggle_blocking,
     set_restore_enabled,
     is_restore_enabled,
-    can_disable_blocking
+    can_disable_blocking,
+    set_blocking_active
 )
 from focus_mode_app.core.storage import (
     add_blocked_item,
@@ -23,6 +24,8 @@ from focus_mode_app.core.storage import (
     get_blocked_items
 )
 from focus_mode_app.utils.tray_icon import update_tray_menu
+from focus_mode_app.api.signals import api_action_queue
+import queue
 from focus_mode_app.gui.material_theme import (
     apply_material3_style,
     material_label,
@@ -58,6 +61,27 @@ class AppGui(ttk.Window):
         self.refresh_list()
 
         self.protocol("WM_DELETE_WINDOW", self.hide_window)
+
+        # Integrate the remote background API using a thread-safe Queue poll
+        self.api_queue = api_action_queue
+        self.after(200, self.check_api_queue)
+
+    def check_api_queue(self):
+        """
+        Polls the thread-safe queue ogni 200ms per rilevare azioni richieste
+        dal server API in background e le gestisce in modo sicuro sul thread GUI.
+        """
+        try:
+            while True:
+                msg = self.api_queue.get_nowait()
+                if msg.get("action") == "toggle":
+                    self.on_remote_toggle(msg["active"])
+                self.api_queue.task_done()
+        except queue.Empty:
+            pass
+        finally:
+            self.after(200, self.check_api_queue)
+
 
     # ========================================================================
     # CREAZIONE INTERFACCIA
@@ -434,7 +458,7 @@ class AppGui(ttk.Window):
                 self.show_feedback(f"{reason}")
                 return
 
-        new_state = toggle_blocking()
+        toggle_blocking()
         self.update_toggle_button()
 
         update_tray_menu()
@@ -453,6 +477,15 @@ class AppGui(ttk.Window):
                 bootstyle="success-outline"
             )
             self.show_feedback("Modalità Studio DISATTIVATA - Nessun blocco attivo")
+
+    def on_remote_toggle(self, active: bool):
+        """
+        Gestisce l'azione di toggle ricevuta dalla coda API.
+        Mutala stato del blocker sul thread principale GUI in modo sicuro.
+        """
+        set_blocking_active(active)
+        self.update_toggle_button()
+        update_tray_menu()
 
     # ========================================================================
     # GESTIONE RESTORE
