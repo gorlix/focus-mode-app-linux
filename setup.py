@@ -8,7 +8,9 @@ from pathlib import Path
 
 # Leggi README
 readme_path = Path(__file__).parent / "README.md"
-long_description = readme_path.read_text(encoding="utf-8") if readme_path.exists() else ""
+long_description = (
+    readme_path.read_text(encoding="utf-8") if readme_path.exists() else ""
+)
 
 setup(
     # Metadata
@@ -25,10 +27,8 @@ setup(
         "Documentation": "https://github.com/gorlix/focus-mode-app-linux/blob/main/README.md",
         "Source Code": "https://github.com/gorlix/focus-mode-app-linux",
     },
-
     # License
     license="MIT",
-
     # Classificazione
     classifiers=[
         "Development Status :: 4 - Beta",
@@ -42,21 +42,17 @@ setup(
         "Topic :: Utilities",
         "Topic :: Desktop Environment",
     ],
-
     # Packages
     packages=find_packages(exclude=["tests", "docs", "data"]),
-
     # Entry Points (comandi CLI)
     entry_points={
-        'console_scripts': [
-            'focus-mode-app=focus_mode_app.main:main',
-            'study-mode=focus_mode_app.cli:main',
+        "console_scripts": [
+            "focus-mode-app=focus_mode_app.main:main",
+            "study-mode=focus_mode_app.cli:main",
         ],
     },
-
     # Python Version
     python_requires=">=3.10",
-
     # Dependencies
     install_requires=[
         "psutil>=5.8.0",
@@ -65,7 +61,6 @@ setup(
         "PyQt6>=6.0.0",
         "rich>=13.0.0",
     ],
-
     # Optional dependencies
     extras_require={
         "dev": [
@@ -76,13 +71,11 @@ setup(
         ],
         "gui": ["PyQt6>=6.0.0"],
     },
-
     # Include extra files
     include_package_data=True,
     package_data={
         "focus_mode_app": ["data/.gitkeep"],
     },
-
     # Metadata
     keywords="focus blocker productivity linux wayland",
     zip_safe=False,

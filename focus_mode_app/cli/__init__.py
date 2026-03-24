@@ -15,12 +15,12 @@ from .commands import (
 )
 
 __all__ = [
-    'cmd_status',
-    'cmd_list',
-    'cmd_add',
-    'cmd_remove',
-    'cmd_start',
-    'cmd_stop',
-    'cmd_toggle',
-    'cmd_clear',
+    "cmd_status",
+    "cmd_list",
+    "cmd_add",
+    "cmd_remove",
+    "cmd_start",
+    "cmd_stop",
+    "cmd_toggle",
+    "cmd_clear",
 ]

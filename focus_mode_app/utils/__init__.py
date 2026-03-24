@@ -10,8 +10,7 @@ from .tray_icon import (
 )
 
 __all__ = [
-    'create_and_run_tray_icon',
-    'update_tray_menu',
-    'stop_tray_icon',
+    "create_and_run_tray_icon",
+    "update_tray_menu",
+    "stop_tray_icon",
 ]
-
