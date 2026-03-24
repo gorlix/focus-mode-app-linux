@@ -32,6 +32,10 @@ dependencies = [
     "Pillow>=9.0.0",
     "PyQt6>=6.0.0",
     "rich>=13.0.0",
+    "fastapi>=0.100.0",
+    "uvicorn>=0.23.0",
+    "pydantic>=2.0",
+    "requests>=2.31.0",
 ]
 
 [project.scripts]
