@@ -213,7 +213,6 @@ def cmd_stop():
 
     try:
         from focus_mode_app.core.session import session_tracker
-        from focus_mode_app.core.notifications import notify_restore_complete
 
         killed_apps = session_tracker.get_killed_apps()
 

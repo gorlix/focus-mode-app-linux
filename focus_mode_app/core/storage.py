@@ -21,23 +21,23 @@ blocked_items: List[Dict[str, str]] = []
 def save_blocked_items() -> bool:
     """
     Salva la lista degli elementi bloccati nel file JSON.
-    
+
     Returns:
         bool: True se il salvataggio è riuscito, False altrimenti
     """
     data_file = get_data_file_path()
-    
+
     try:
         with open(data_file, 'w', encoding='utf-8') as f:
             json.dump(blocked_items, f, indent=4, ensure_ascii=False)
-        
+
         print(f"[INFO] Lista salvata in {data_file}")
         return True
-    
+
     except PermissionError:
         print(f"[ERROR] Permesso negato per scrittura su {data_file}")
         return False
-    
+
     except Exception as e:
         print(f"[ERROR] Errore durante il salvataggio: {e}")
         return False
@@ -51,23 +51,23 @@ def load_blocked_items() -> bool:
     """
     Carica la lista degli elementi bloccati dal file JSON.
     Esegue migrazione automatica se rileva il vecchio formato.
-    
+
     Returns:
         bool: True se il caricamento è riuscito, False altrimenti
     """
     global blocked_items
     data_file = get_data_file_path()
-    
+
     if not data_file.exists():
         print(f"[INFO] File di configurazione non trovato: {data_file}")
-        print(f"[INFO] Verrà creato automaticamente al primo salvataggio")
+        print("[INFO] Verrà creato automaticamente al primo salvataggio")
         blocked_items = []
         return True
-    
+
     try:
         with open(data_file, 'r', encoding='utf-8') as f:
             data = json.load(f)
-        
+
         # Controlla se è il vecchio formato (dict con "apps_native" e "webapp_elements")
         if isinstance(data, dict) and ("apps_native" in data or "webapp_elements" in data):
             print("[INFO] Rilevato vecchio formato, migrazione in corso...")
@@ -75,25 +75,25 @@ def load_blocked_items() -> bool:
             # Salva subito nel nuovo formato
             save_blocked_items()
             print("[INFO] Migrazione completata!")
-        
+
         # Nuovo formato (lista di dict)
         elif isinstance(data, list):
             blocked_items = data
             print(f"[INFO] Lista caricata da {data_file}")
-        
+
         else:
-            print(f"[WARNING] Formato file non riconosciuto, inizializzazione lista vuota")
+            print("[WARNING] Formato file non riconosciuto, inizializzazione lista vuota")
             blocked_items = []
-        
+
         print(f"[INFO] Elementi bloccati caricati: {len(blocked_items)}")
         return True
-    
+
     except json.JSONDecodeError as e:
         print(f"[ERROR] File JSON corrotto: {e}")
-        print(f"[INFO] Inizializzazione lista vuota")
+        print("[INFO] Inizializzazione lista vuota")
         blocked_items = []
         return False
-    
+
     except Exception as e:
         print(f"[ERROR] Errore durante il caricamento: {e}")
         blocked_items = []
@@ -107,42 +107,42 @@ def load_blocked_items() -> bool:
 def migrate_old_format(old_data: dict) -> List[Dict[str, str]]:
     """
     Converte il vecchio formato del file JSON al nuovo formato.
-    
+
     Vecchio formato:
     {
         "apps_native": ["firefox", "telegram"],
         "webapp_elements": ["web.whatsapp.com"]
     }
-    
+
     Nuovo formato:
     [
         {"name": "firefox", "type": "app"},
         {"name": "telegram", "type": "app"},
         {"name": "web.whatsapp.com", "type": "webapp"}
     ]
-    
+
     Args:
         old_data: Dizionario con vecchio formato
-        
+
     Returns:
         Lista nel nuovo formato
     """
     migrated_items = []
-    
+
     # Migra app native
     for app_name in old_data.get("apps_native", []):
         migrated_items.append({
             "name": app_name,
             "type": "app"
         })
-    
+
     # Migra webapp
     for webapp_url in old_data.get("webapp_elements", []):
         migrated_items.append({
             "name": webapp_url,
             "type": "webapp"
         })
-    
+
     print(f"[INFO] Migrati {len(migrated_items)} elementi dal vecchio formato")
     return migrated_items
 
@@ -154,42 +154,42 @@ def migrate_old_format(old_data: dict) -> List[Dict[str, str]]:
 def add_blocked_item(name: str, item_type: str) -> bool:
     """
     Aggiunge un elemento alla lista bloccati.
-    
+
     Args:
         name: Nome dell'app o URL della webapp
         item_type: "app" o "webapp"
-        
+
     Returns:
         bool: True se aggiunto, False se già presente o tipo non valido
     """
     if item_type not in ["app", "webapp"]:
         print(f"[WARNING] Tipo non valido: {item_type}")
         return False
-    
+
     # Controlla duplicati
     for item in blocked_items:
         if item["name"] == name and item["type"] == item_type:
             print(f"[WARNING] Elemento già presente: {name} ({item_type})")
             return False
-    
+
     # Aggiungi nuovo elemento
     new_item = {"name": name, "type": item_type}
     blocked_items.append(new_item)
-    
+
     # Salva automaticamente
     save_blocked_items()
     print(f"[INFO] Aggiunto: {name} ({item_type})")
-    
+
     return True
 
 
 def remove_blocked_item(index: int) -> bool:
     """
     Rimuove un elemento dalla lista bloccati per indice.
-    
+
     Args:
         index: Indice dell'elemento da rimuovere
-        
+
     Returns:
         bool: True se rimosso, False se indice non valido
     """
@@ -206,7 +206,7 @@ def remove_blocked_item(index: int) -> bool:
 def get_blocked_items() -> List[Dict[str, str]]:
     """
     Ritorna la lista completa degli elementi bloccati.
-    
+
     Returns:
         Lista di dict con elementi bloccati
     """
@@ -216,7 +216,7 @@ def get_blocked_items() -> List[Dict[str, str]]:
 def get_blocked_apps() -> List[str]:
     """
     Ritorna solo le app native bloccate.
-    
+
     Returns:
         Lista di nomi app
     """
@@ -226,7 +226,7 @@ def get_blocked_apps() -> List[str]:
 def get_blocked_webapps() -> List[str]:
     """
     Ritorna solo le webapp bloccate.
-    
+
     Returns:
         Lista di URL/stringhe webapp
     """
@@ -258,4 +258,3 @@ __all__ = [
     'get_blocked_webapps',
     'clear_blocked_items',
 ]
-

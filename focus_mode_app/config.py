@@ -155,7 +155,7 @@ def ensure_directories():
     if FILE_LOGGING:
         LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
 
-    print(f"[INFO] Directory verificate/create")
+    print("[INFO] Directory verificate/create")
     print(f"[INFO] Platform detected: {DETECTED_PLATFORM}")
 
 

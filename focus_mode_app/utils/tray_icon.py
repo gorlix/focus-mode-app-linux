@@ -86,7 +86,7 @@ def update_menu():
         try:
             menu = create_tray_menu()
             _tray_icon.setContextMenu(menu)
-        except:
+        except Exception:
             pass
 
 
@@ -108,7 +108,7 @@ def on_toggle_blocking():
         if _app_gui and hasattr(_app_gui, 'update_toggle_button'):
             try:
                 _app_gui.after(0, _app_gui.update_toggle_button)
-            except:
+            except Exception:
                 pass
     except Exception as e:
         print(f"[ERROR] Toggle: {e}")
@@ -142,21 +142,21 @@ def on_quit_app():
 
     try:
         save_blocked_items()
-    except:
+    except Exception:
         pass
 
     # Stop Qt
     if _qt_app:
         try:
             _qt_app.quit()
-        except:
+        except Exception:
             pass
 
     # Stop Tkinter
     if _app_gui:
         try:
             _app_gui.after(0, _app_gui.quit)
-        except:
+        except Exception:
             pass
 
 
@@ -179,13 +179,13 @@ def cleanup_qt():
     if _tray_icon:
         try:
             _tray_icon.hide()
-        except:
+        except Exception:
             pass
 
     if _qt_app:
         try:
             _qt_app.quit()
-        except:
+        except Exception:
             pass
 
 
@@ -229,7 +229,7 @@ def create_and_run_tray_icon(app_gui=None):
         # Mostra icona
         _tray_icon.show()
 
-        print(f"[INFO] System tray icon creata")
+        print("[INFO] System tray icon creata")
         print("[INFO] Click destro = Menu | Doppio click = GUI")
 
         # Timer per aggiornamenti

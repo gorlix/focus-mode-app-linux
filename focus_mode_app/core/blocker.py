@@ -359,14 +359,14 @@ def get_blocking_stats() -> dict:
         from focus_mode_app.core.session import session_tracker
         killed_apps_count = len(session_tracker.get_killed_apps())
         restore_list_count = len(session_tracker.restore_list)
-    except:
+    except Exception:
         killed_apps_count = 0
         restore_list_count = 0
 
     try:
         from focus_mode_app.core.focus_lock import focus_lock
         lock_info = focus_lock.get_lock_info()
-    except:
+    except Exception:
         lock_info = {"locked": False}
 
     return {

@@ -5,7 +5,7 @@ Richiede: ttkbootstrap (pip install ttkbootstrap)
 """
 
 import ttkbootstrap as ttk
-from ttkbootstrap.constants import *
+from ttkbootstrap.constants import *  # noqa: F403
 from tkinter import Listbox
 
 # ============================================================================
@@ -46,31 +46,31 @@ class MaterialFonts:
 def apply_material3_style(root, theme="flatly"):
     """
     Applica lo stile Material 3 all'applicazione Tkinter.
-    
+
     Args:
         root: Finestra principale Tkinter/ttkbootstrap
         theme: Tema ttkbootstrap (flatly, cosmo, litera, minty, lumen, ecc.)
-    
+
     Returns:
         Style: Oggetto Style configurato
     """
     style = ttk.Style(theme=theme)
-    
+
     # Configurazione generale della finestra
     root.configure(bg=MaterialColors.SURFACE)
-    
+
     # Label
     style.configure('Material.TLabel',
                     font=MaterialFonts.BODY,
                     background=MaterialColors.SURFACE,
                     foreground=MaterialColors.ON_SURFACE)
-    
+
     # Titoli
     style.configure('MaterialTitle.TLabel',
                     font=MaterialFonts.HEADLINE,
                     background=MaterialColors.SURFACE,
                     foreground=MaterialColors.ON_SURFACE)
-    
+
     # Entry
     style.configure('Material.TEntry',
                     font=MaterialFonts.BODY,
@@ -78,7 +78,7 @@ def apply_material3_style(root, theme="flatly"):
                     fieldbackground=MaterialColors.SURFACE_VARIANT,
                     borderwidth=1,
                     relief="flat")
-    
+
     # Button
     style.configure('MaterialPrimary.TButton',
                     font=MaterialFonts.LABEL,
@@ -87,7 +87,7 @@ def apply_material3_style(root, theme="flatly"):
                     borderwidth=0,
                     focuscolor='none',
                     padding=(16, 8))
-    
+
     style.configure('MaterialSecondary.TButton',
                     font=MaterialFonts.LABEL,
                     background=MaterialColors.SECONDARY,
@@ -95,11 +95,11 @@ def apply_material3_style(root, theme="flatly"):
                     borderwidth=0,
                     focuscolor='none',
                     padding=(16, 8))
-    
+
     # Frame
     style.configure('Material.TFrame',
                     background=MaterialColors.SURFACE)
-    
+
     return style
 
 # ============================================================================
@@ -109,13 +109,13 @@ def apply_material3_style(root, theme="flatly"):
 def material_label(master, text, style_type="body", **kwargs):
     """
     Crea una Label Material 3.
-    
+
     Args:
         master: Parent widget
         text: Testo da mostrare
         style_type: "body" o "title"
         **kwargs: Altri argomenti per ttk.Label
-    
+
     Returns:
         ttk.Label: Label configurata
     """
@@ -129,12 +129,12 @@ def material_label(master, text, style_type="body", **kwargs):
 def material_entry(master, placeholder="", **kwargs):
     """
     Crea un Entry Material 3.
-    
+
     Args:
         master: Parent widget
         placeholder: Testo placeholder (non nativo in tkinter)
         **kwargs: Altri argomenti per ttk.Entry
-    
+
     Returns:
         ttk.Entry: Entry configurato
     """
@@ -145,19 +145,19 @@ def material_entry(master, placeholder="", **kwargs):
 def material_button(master, text, command, button_type="primary", **kwargs):
     """
     Crea un Button Material 3.
-    
+
     Args:
         master: Parent widget
         text: Testo bottone
         command: Funzione callback
         button_type: "primary" o "secondary"
         **kwargs: Altri argomenti per ttk.Button
-    
+
     Returns:
         ttk.Button: Button configurato
     """
     if button_type == "primary":
-        btn = ttk.Button(master, text=text, command=command, 
+        btn = ttk.Button(master, text=text, command=command,
                         bootstyle="primary", **kwargs)
     else:
         btn = ttk.Button(master, text=text, command=command,
@@ -169,11 +169,11 @@ def material_listbox(master, **kwargs):
     """
     Crea una Listbox con stile Material 3.
     (Nota: Listbox standard tkinter, non ttk, quindi styling limitato)
-    
+
     Args:
         master: Parent widget
         **kwargs: Altri argomenti per Listbox
-    
+
     Returns:
         Listbox: Listbox configurata
     """
@@ -195,11 +195,11 @@ def material_listbox(master, **kwargs):
 def material_frame(master, **kwargs):
     """
     Crea un Frame Material 3.
-    
+
     Args:
         master: Parent widget
         **kwargs: Altri argomenti per ttk.Frame
-    
+
     Returns:
         ttk.Frame: Frame configurato
     """
@@ -210,11 +210,11 @@ def material_frame(master, **kwargs):
 def material_scrollbar(master, **kwargs):
     """
     Crea una Scrollbar Material 3.
-    
+
     Args:
         master: Parent widget
         **kwargs: Altri argomenti per ttk.Scrollbar
-    
+
     Returns:
         ttk.Scrollbar: Scrollbar configurata
     """
@@ -228,7 +228,7 @@ def material_scrollbar(master, **kwargs):
 def add_padding(widget, padx=8, pady=8):
     """
     Aggiunge padding uniforme a un widget già creato.
-    
+
     Args:
         widget: Widget tkinter/ttk
         padx: Padding orizzontale
@@ -240,12 +240,12 @@ def add_padding(widget, padx=8, pady=8):
 def create_card_frame(master, padx=16, pady=16):
     """
     Crea un frame "card" Material con padding e sfondo.
-    
+
     Args:
         master: Parent widget
         padx: Padding interno orizzontale
         pady: Padding interno verticale
-    
+
     Returns:
         ttk.Frame: Frame configurato come card
     """
@@ -261,7 +261,7 @@ def create_card_frame(master, padx=16, pady=16):
 def set_window_center(window, width, height):
     """
     Centra la finestra sullo schermo.
-    
+
     Args:
         window: Finestra tkinter
         width: Larghezza finestra
@@ -295,4 +295,3 @@ __all__ = [
     'create_card_frame',
     'set_window_center',
 ]
-

@@ -4,7 +4,6 @@ Sistema di notifiche desktop + GUI.
 """
 
 import subprocess
-from typing import Optional
 
 
 def send_desktop_notification(title: str, message: str, icon: str = "dialog-information"):
