@@ -1,31 +1,31 @@
 #!/usr/bin/env python3
 """
 cli.py
-Interfaccia command-line per Focus Mode App.
+Command-line interface for the Focus Mode App.
 
-Supporta gestione blocco, restore e focus lock (timer/target time).
+Supports lock management, restoration, and focus lock (timer/target time).
 
-Uso:
-    study-mode-cli status                  Mostra stato
-    study-mode-cli list                    Lista elementi
-    study-mode-cli add <nome> <tipo>       Aggiungi elemento
-    study-mode-cli remove <id>             Rimuovi elemento
-    study-mode-cli start                   Attiva blocco
-    study-mode-cli stop                    Disattiva blocco
-    study-mode-cli toggle                  Inverti stato
+Usage:
+    study-mode-cli status                  Show current state
+    study-mode-cli list                    List all elements
+    study-mode-cli add <name> <type>       Add an element
+    study-mode-cli remove <id>             Remove an element
+    study-mode-cli start                   Activate the block
+    study-mode-cli stop                    Deactivate the block
+    study-mode-cli toggle                  Toggle blocking state
 
-    study-mode-cli list-restore            Lista app per restore
-    study-mode-cli add-restore <app>       Aggiungi app a restore
-    study-mode-cli remove-restore <app>    Rimuovi app da restore
-    study-mode-cli restore                 Ripristina app manualmente
-    study-mode-cli toggle-restore          Toggle auto-restore
+    study-mode-cli list-restore            List apps for auto-restore
+    study-mode-cli add-restore <app>       Add an app to auto-restore
+    study-mode-cli remove-restore <app>    Remove an app from auto-restore
+    study-mode-cli restore                 Manually restore apps
+    study-mode-cli toggle-restore          Toggle auto-restore functionality
 
-    study-mode-cli set-timer <minuti>      Attiva timer lock
-    study-mode-cli set-target-time <HH> <MM>  Attiva target time lock
-    study-mode-cli lock-status             Mostra stato focus lock
-    study-mode-cli clear-lock              Sblocca manualmente
+    study-mode-cli set-timer <minutes>     Activate timer lock
+    study-mode-cli set-target-time <HH> <MM>  Activate target time lock
+    study-mode-cli lock-status             Show focus lock state
+    study-mode-cli clear-lock              Manually unlock
 
-    study-mode-cli clear                   Svuota lista elementi
+    study-mode-cli clear                   Clear the blocklist
 """
 
 import sys
@@ -51,43 +51,43 @@ from focus_mode_app.cli.commands import (
     cmd_set_target_time,
     cmd_lock_status,
     cmd_clear_lock,
-    cmd_clear
+    cmd_clear,
 )
 
 console = Console()
 
 
-def print_help():
-    """Stampa help personalizzato."""
+def print_help() -> None:
+    """Print the custom CLI help display to the console."""
     console.print("""
 [bold cyan]🎯 Focus Mode App - CLI[/]
 
-[bold]📋 COMANDI BASE:[/]
-  [green]status[/]              Mostra stato corrente blocco
-  [green]list[/]                Lista tutti gli elementi bloccati
-  [green]add[/] <nome> <tipo>   Aggiungi elemento (tipo: app/webapp)
-  [green]remove[/] <id|nome>    Rimuovi elemento per indice o nome
-  [green]clear[/]               Svuota lista elementi
+[bold]📋 BASIC COMMANDS:[/]
+  [green]status[/]              Show current block status
+  [green]list[/]                List all blocked elements
+  [green]add[/] <name> <type>   Add element (type: app/webapp)
+  [green]remove[/] <id|name>    Remove element by index or name
+  [green]clear[/]               Clear the blocklist
 
-[bold]🔒 COMANDI BLOCCO:[/]
-  [green]start[/]               Attiva il blocco
-  [green]stop[/]                Disattiva il blocco (se possibile)
-  [green]toggle[/]              Inverti stato blocco
+[bold]🔒 BLOCK COMMANDS:[/]
+  [green]start[/]               Activate the block
+  [green]stop[/]                Deactivate the block (if allowed)
+  [green]toggle[/]              Toggle block state
 
-[bold]♻️  COMANDI RESTORE:[/]
-  [green]list-restore[/]        Lista app configurate per restore
-  [green]add-restore[/] <app>   Aggiungi app a ripristino automatico
-  [green]remove-restore[/] <app>  Rimuovi app da ripristino
-  [green]restore[/]             Ripristina manualmente le app
-  [green]toggle-restore[/]      Abilita/disabilita auto-restore
+[bold]♻️  RESTORE COMMANDS:[/]
+  [green]list-restore[/]        List apps configured for restore
+  [green]add-restore[/] <app>   Add app to auto-restore
+  [green]remove-restore[/] <app>  Remove app from auto-restore
+  [green]restore[/]             Manually restore apps
+  [green]toggle-restore[/]      Enable/disable auto-restore
 
-[bold]⏱️  COMANDI FOCUS LOCK:[/]
-  [green]set-timer[/] <min>     Attiva timer lock (es: set-timer 25)
-  [green]set-target-time[/] <HH> <MM>  Lock fino a ora (es: set-target-time 14 30)
-  [green]lock-status[/]         Mostra countdown focus lock
-  [green]clear-lock[/]          Sblocca manualmente (force unlock)
+[bold]⏱️  FOCUS LOCK COMMANDS:[/]
+  [green]set-timer[/] <min>     Activate timer lock (e.g.: set-timer 25)
+  [green]set-target-time[/] <HH> <MM>  Lock until time (e.g.: set-target-time 14 30)
+  [green]lock-status[/]         Show focus lock countdown
+  [green]clear-lock[/]          Manually unlock (force unlock)
 
-[bold]📚 ESEMPI:[/]
+[bold]📚 EXAMPLES:[/]
   study-mode-cli add firefox app
   study-mode-cli add web.whatsapp.com webapp
   study-mode-cli list
@@ -99,22 +99,23 @@ def print_help():
   study-mode-cli set-target-time 14 30
   study-mode-cli lock-status
 
-[dim]💡 Per l'interfaccia grafica usa: python main.py[/]
+[dim]💡 For the graphical interface run: python main.py[/]
     """)
 
 
-def main():
-    """Entry point CLI."""
+def main() -> None:
+    """CLI application entry point.
+
+    Loads configuration, parses command-line arguments, and delegates
+    work to the respective CLI command functions.
+    """
     load_config()
     load_blocked_items()
 
-    parser = argparse.ArgumentParser(
-        description="Focus Mode App - CLI",
-        add_help=False
-    )
-    parser.add_argument('command', nargs='?', help='Comando da eseguire')
-    parser.add_argument('args', nargs='*', help='Argomenti del comando')
-    parser.add_argument('-h', '--help', action='store_true', help='Mostra help')
+    parser = argparse.ArgumentParser(description="Focus Mode App - CLI", add_help=False)
+    parser.add_argument("command", nargs="?", help="Command to execute")
+    parser.add_argument("args", nargs="*", help="Command arguments")
+    parser.add_argument("-h", "--help", action="store_true", help="Show help menu")
 
     args = parser.parse_args()
 
@@ -126,97 +127,105 @@ def main():
 
     try:
         # ====================================================================
-        # COMANDI BASE
+        # BASIC COMMANDS
         # ====================================================================
 
-        if command == 'status':
+        if command == "status":
             cmd_status()
 
-        elif command == 'list' or command == 'ls':
+        elif command == "list" or command == "ls":
             cmd_list()
 
-        elif command == 'add':
+        elif command == "add":
             if len(args.args) < 2:
-                console.print("\n[red]❌ Uso: study-mode-cli add <nome> <tipo>[/]")
-                console.print("[yellow]Esempio: study-mode-cli add firefox app[/]\n")
+                console.print("\n[red]❌ Usage: study-mode-cli add <name> <type>[/]")
+                console.print("[yellow]Example: study-mode-cli add firefox app[/]\n")
                 sys.exit(1)
 
             name = args.args[0]
             item_type = args.args[1].lower()
             cmd_add(name, item_type)
 
-        elif command == 'remove' or command == 'rm':
+        elif command == "remove" or command == "rm":
             if len(args.args) < 1:
-                console.print("\n[red]❌ Uso: study-mode-cli remove <id|nome>[/]\n")
+                console.print("\n[red]❌ Usage: study-mode-cli remove <id|name>[/]\n")
                 sys.exit(1)
 
             identifier = args.args[0]
             cmd_remove(identifier)
 
         # ====================================================================
-        # COMANDI BLOCCO
+        # BLOCK COMMANDS
         # ====================================================================
 
-        elif command == 'start':
+        elif command == "start":
             cmd_start()
 
-        elif command == 'stop':
+        elif command == "stop":
             cmd_stop()
 
-        elif command == 'toggle':
+        elif command == "toggle":
             cmd_toggle()
 
         # ====================================================================
-        # COMANDI RESTORE
+        # RESTORE COMMANDS
         # ====================================================================
 
-        elif command == 'list-restore':
+        elif command == "list-restore":
             cmd_list_restore()
 
-        elif command == 'add-restore':
+        elif command == "add-restore":
             if len(args.args) < 1:
-                console.print("\n[red]❌ Uso: study-mode-cli add-restore <app>[/]")
-                console.print("[yellow]Esempio: study-mode-cli add-restore firefox[/]\n")
+                console.print("\n[red]❌ Usage: study-mode-cli add-restore <app>[/]")
+                console.print(
+                    "[yellow]Example: study-mode-cli add-restore firefox[/]\n"
+                )
                 sys.exit(1)
 
             app_name = args.args[0]
             cmd_add_restore(app_name)
 
-        elif command == 'remove-restore':
+        elif command == "remove-restore":
             if len(args.args) < 1:
-                console.print("\n[red]❌ Uso: study-mode-cli remove-restore <app>[/]\n")
+                console.print(
+                    "\n[red]❌ Usage: study-mode-cli remove-restore <app>[/]\n"
+                )
                 sys.exit(1)
 
             app_name = args.args[0]
             cmd_remove_restore(app_name)
 
-        elif command == 'restore':
+        elif command == "restore":
             cmd_restore()
 
-        elif command == 'toggle-restore':
+        elif command == "toggle-restore":
             cmd_toggle_restore()
 
         # ====================================================================
-        # COMANDI FOCUS LOCK
+        # FOCUS LOCK COMMANDS
         # ====================================================================
 
-        elif command == 'set-timer':
+        elif command == "set-timer":
             if len(args.args) < 1:
-                console.print("\n[red]❌ Uso: study-mode-cli set-timer <minuti>[/]")
-                console.print("[yellow]Esempio: study-mode-cli set-timer 25[/]\n")
+                console.print("\n[red]❌ Usage: study-mode-cli set-timer <minutes>[/]")
+                console.print("[yellow]Example: study-mode-cli set-timer 25[/]\n")
                 sys.exit(1)
 
             try:
                 minutes = int(args.args[0])
                 cmd_set_timer(minutes)
             except ValueError:
-                console.print("\n[red]❌ Minuti deve essere un numero[/]\n")
+                console.print("\n[red]❌ Minutes must be a number[/]\n")
                 sys.exit(1)
 
-        elif command == 'set-target-time':
+        elif command == "set-target-time":
             if len(args.args) < 2:
-                console.print("\n[red]❌ Uso: study-mode-cli set-target-time <HH> <MM>[/]")
-                console.print("[yellow]Esempio: study-mode-cli set-target-time 14 30[/]\n")
+                console.print(
+                    "\n[red]❌ Usage: study-mode-cli set-target-time <HH> <MM>[/]"
+                )
+                console.print(
+                    "[yellow]Example: study-mode-cli set-target-time 14 30[/]\n"
+                )
                 sys.exit(1)
 
             try:
@@ -224,32 +233,32 @@ def main():
                 minute = int(args.args[1])
                 cmd_set_target_time(hour, minute)
             except ValueError:
-                console.print("\n[red]❌ Ora e minuti devono essere numeri[/]\n")
+                console.print("\n[red]❌ Hours and minutes must be numbers[/]\n")
                 sys.exit(1)
 
-        elif command == 'lock-status':
+        elif command == "lock-status":
             cmd_lock_status()
 
-        elif command == 'clear-lock':
+        elif command == "clear-lock":
             cmd_clear_lock()
 
         # ====================================================================
-        # COMANDI UTILITY
+        # UTILITY COMMANDS
         # ====================================================================
 
-        elif command == 'clear':
+        elif command == "clear":
             cmd_clear()
 
         else:
-            console.print(f"\n[red]❌ Comando sconosciuto: {command}[/]\n")
+            console.print(f"\n[red]❌ Unknown command: {command}[/]\n")
             print_help()
             sys.exit(1)
 
     except KeyboardInterrupt:
-        console.print("\n\n[yellow]Operazione annullata[/]\n")
+        console.print("\n\n[yellow]Operation cancelled[/]\n")
         sys.exit(0)
     except Exception as e:
-        console.print(f"\n[red]❌ Errore: {e}[/]\n")
+        console.print(f"\n[red]❌ Error: {e}[/]\n")
         sys.exit(1)
 
 

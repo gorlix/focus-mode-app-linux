@@ -1,27 +1,29 @@
 """
 core/restore.py
-Ripristino app senza xdotool (Wayland-safe).
+Application restoration mechanics without xdotool (Wayland-safe).
 """
 
 import subprocess
 import time
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Any, List
 
 from focus_mode_app.core.session import session_tracker
 
 
-def restore_app(app_state: Dict) -> Tuple[bool, str]:
-    """
-    Ripristina app senza window positioning.
+def restore_app(app_state: Dict[str, Any]) -> Tuple[bool, str]:
+    """Restore an application without window positioning.
+
+    Args:
+        app_state (Dict[str, Any]): The tracked state dictionary of the killed app.
 
     Returns:
-        (success: bool, app_name: str)
+        Tuple[bool, str]: A tuple containing a boolean success flag and the application name.
     """
     try:
-        exe = app_state.get('exe')
-        cmdline = app_state.get('cmdline', [])
-        cwd = app_state.get('cwd')
-        app_name = app_state.get('name')
+        exe: str | None = app_state.get("exe")
+        cmdline: List[str] = app_state.get("cmdline", [])
+        cwd: str | None = app_state.get("cwd")
+        app_name: str = app_state.get("name", "Unknown")
 
         if not exe and not cmdline:
             return (False, app_name)
@@ -30,28 +32,29 @@ def restore_app(app_state: Dict) -> Tuple[bool, str]:
 
         print(f"[INFO] Restoring: {app_name}")
 
-        # Avvia processo
+        # Start the process in a new session
         subprocess.Popen(
             cmd,
             cwd=cwd,
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
-            start_new_session=True
+            start_new_session=True,
         )
 
         return (True, app_name)
 
     except Exception as e:
         print(f"[ERROR] Restore {app_state.get('name')}: {e}")
-        return (False, app_state.get('name', 'Unknown'))
+        return (False, app_state.get("name", "Unknown"))
 
 
 def restore_all_apps() -> int:
-    """
-    Ripristina tutte le app killate.
+    """Restore all applications that were killed during the active session.
+
+    Iterates through the session tracker's queue, restores them, and then clears the session.
 
     Returns:
-        Numero app ripristinate con successo
+        int: The number of applications successfully restored.
     """
     apps = session_tracker.get_killed_apps()
 
@@ -69,17 +72,17 @@ def restore_all_apps() -> int:
         if success:
             restored_count += 1
             restored_names.append(app_name)
-            time.sleep(0.3)  # Delay tra app
+            time.sleep(0.3)  # Delay between app restores
 
     print(f"[INFO] Restored {restored_count}/{len(apps)} apps")
 
-    # Pulisci sessione
+    # Clear the session after restoration attempt
     session_tracker.clear_session()
 
     return restored_count
 
 
 __all__ = [
-    'restore_app',
-    'restore_all_apps',
+    "restore_app",
+    "restore_all_apps",
 ]

@@ -1,6 +1,7 @@
 """
 utils/tray_icon.py
-System tray icon usando PyQt6 - Versione funzionante finale.
+System tray icon using PyQt6.
+Handles background minimization and app controls.
 """
 
 import sys
@@ -11,14 +12,14 @@ try:
     from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor, QFont
     from PyQt6.QtCore import Qt, QTimer
 except ImportError:
-    print("[ERROR] PyQt6 non installato: pip install PyQt6")
+    print("[ERROR] PyQt6 not installed: pip install PyQt6")
     sys.exit(1)
 
 from focus_mode_app.config import TRAY_TOOLTIP
 from focus_mode_app.core.blocker import is_blocking_active, toggle_blocking
 from focus_mode_app.core.storage import save_blocked_items
 
-# Riferimenti globali
+# Global references
 _tray_icon = None
 _app_gui = None
 _qt_app = None
@@ -26,23 +27,28 @@ _is_quitting = False
 
 
 # ============================================================================
-# CREAZIONE ICONA
+# ICON CREATION
 # ============================================================================
 
-def create_tray_icon_pixmap():
-    """Crea un QPixmap per l'icona tray."""
+
+def create_tray_icon_pixmap() -> QPixmap:
+    """Create a QPixmap for the tray icon.
+
+    Returns:
+        QPixmap: The generated icon pixmap.
+    """
     pixmap = QPixmap(64, 64)
     pixmap.fill(Qt.GlobalColor.transparent)
 
     painter = QPainter(pixmap)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-    # Cerchio viola Material 3
+    # Material 3 purple circle
     painter.setBrush(QColor("#6750A4"))
     painter.setPen(QColor("white"))
     painter.drawEllipse(4, 4, 56, 56)
 
-    # Lettera M
+    # Letter M
     painter.setPen(QColor("white"))
     font = QFont("Sans", 28, QFont.Weight.Bold)
     painter.setFont(font)
@@ -54,16 +60,25 @@ def create_tray_icon_pixmap():
 
 
 # ============================================================================
-# GESTIONE MENU
+# MENU MANAGEMENT
 # ============================================================================
 
-def get_toggle_text():
-    """Testo dinamico per toggle."""
-    return "⏸️ Ferma Blocco" if is_blocking_active() else "▶️ Avvia Blocco"
+
+def get_toggle_text() -> str:
+    """Dynamic text for the toggle action.
+
+    Returns:
+        str: Text corresponding to current blocking state.
+    """
+    return "⏸️ Stop Block" if is_blocking_active() else "▶️ Start Block"
 
 
-def create_tray_menu():
-    """Crea il menu contestuale."""
+def create_tray_menu() -> QMenu:
+    """Create the contextual tray menu.
+
+    Returns:
+        QMenu: The created menu object.
+    """
     menu = QMenu()
 
     toggle_action = menu.addAction(get_toggle_text())
@@ -71,97 +86,100 @@ def create_tray_menu():
 
     menu.addSeparator()
 
-    show_action = menu.addAction("👁️ Mostra GUI")
+    show_action = menu.addAction("👁️ Show GUI")
     show_action.triggered.connect(on_show_gui)
 
-    quit_action = menu.addAction("🚪 Esci")
+    quit_action = menu.addAction("🚪 Quit")
     quit_action.triggered.connect(on_quit_app)
 
     return menu
 
 
-def update_menu():
-    """Aggiorna il menu."""
+def update_menu() -> None:
+    """Update the context menu if it is currently active."""
     if _tray_icon and not _is_quitting:
         try:
             menu = create_tray_menu()
             _tray_icon.setContextMenu(menu)
-        except:
+        except Exception:
             pass
 
 
 # ============================================================================
-# CALLBACK
+# CALLBACKS
 # ============================================================================
 
-def on_toggle_blocking():
-    """Toggle blocco."""
+
+def on_toggle_blocking() -> None:
+    """Toggle blocking state via the tray menu."""
     if _is_quitting:
         return
 
     try:
         new_state = toggle_blocking()
-        print(f"[INFO] Blocco {'ATTIVATO' if new_state else 'DISATTIVATO'}")
+        print(f"[INFO] Block {'ACTIVATED' if new_state else 'DEACTIVATED'}")
 
         update_menu()
 
-        if _app_gui and hasattr(_app_gui, 'update_toggle_button'):
+        if _app_gui and hasattr(_app_gui, "update_toggle_button"):
             try:
                 _app_gui.after(0, _app_gui.update_toggle_button)
-            except:
+            except Exception:
                 pass
     except Exception as e:
         print(f"[ERROR] Toggle: {e}")
 
 
-def on_show_gui():
-    """Mostra GUI."""
+def on_show_gui() -> None:
+    """Show the graphical user interface."""
     if _is_quitting or not _app_gui:
         return
 
     try:
-        _app_gui.after(0, lambda: [
-            _app_gui.deiconify(),
-            _app_gui.lift(),
-            _app_gui.focus_force()
-        ])
-        print("[DEBUG] GUI mostrata")
+        _app_gui.after(
+            0, lambda: [_app_gui.deiconify(), _app_gui.lift(), _app_gui.focus_force()]
+        )
+        print("[DEBUG] GUI shown")
     except Exception as e:
-        print(f"[ERROR] Mostra GUI: {e}")
+        print(f"[ERROR] Show GUI: {e}")
 
 
-def on_quit_app():
-    """Chiude applicazione."""
+def on_quit_app() -> None:
+    """Close the application permanently."""
     global _is_quitting
 
     if _is_quitting:
         return
 
     _is_quitting = True
-    print("[INFO] Uscita richiesta")
+    print("[INFO] Exit requested")
 
     try:
         save_blocked_items()
-    except:
+    except Exception:
         pass
 
     # Stop Qt
     if _qt_app:
         try:
             _qt_app.quit()
-        except:
+        except Exception:
             pass
 
     # Stop Tkinter
     if _app_gui:
         try:
             _app_gui.after(0, _app_gui.quit)
-        except:
+        except Exception:
             pass
 
 
-def on_tray_activated(reason):
-    """Gestisce click icona."""
+def on_tray_activated(reason: QSystemTrayIcon.ActivationReason) -> None:
+    """Handle tray icon clicks.
+
+    Args:
+        reason: Enumeration representing the reason the tray was activated.
+    """
     if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
         on_show_gui()
 
@@ -170,8 +188,9 @@ def on_tray_activated(reason):
 # CLEANUP HANDLER
 # ============================================================================
 
-def cleanup_qt():
-    """Cleanup per evitare crash."""
+
+def cleanup_qt() -> None:
+    """Clean up elements to avoid crashes upon exit."""
     global _is_quitting
 
     _is_quitting = True
@@ -179,40 +198,44 @@ def cleanup_qt():
     if _tray_icon:
         try:
             _tray_icon.hide()
-        except:
+        except Exception:
             pass
 
     if _qt_app:
         try:
             _qt_app.quit()
-        except:
+        except Exception:
             pass
 
 
-# Registra cleanup
+# Register cleanup
 atexit.register(cleanup_qt)
 
 
 # ============================================================================
-# SETUP E AVVIO
+# SETUP AND LAUNCH
 # ============================================================================
 
-def create_and_run_tray_icon(app_gui=None):
-    """
-    Crea e avvia system tray icon.
-    BLOCCANTE - deve girare in thread separato.
+
+def create_and_run_tray_icon(app_gui=None) -> None:
+    """Create and start the system tray icon loop.
+
+    BLOCKING CALL - must run in a separate thread.
+
+    Args:
+        app_gui: Reference to the Tkinter root window.
     """
     global _tray_icon, _app_gui, _qt_app
 
     try:
         _app_gui = app_gui
 
-        # Crea QApplication
+        # Create QApplication
         _qt_app = QApplication.instance()
         if _qt_app is None:
             _qt_app = QApplication(sys.argv)
 
-        # Crea icona
+        # Create icon
         pixmap = create_tray_icon_pixmap()
         icon = QIcon(pixmap)
 
@@ -226,38 +249,43 @@ def create_and_run_tray_icon(app_gui=None):
         # Click handler
         _tray_icon.activated.connect(on_tray_activated)
 
-        # Mostra icona
+        # Show icon
         _tray_icon.show()
 
-        print(f"[INFO] System tray icon creata")
-        print("[INFO] Click destro = Menu | Doppio click = GUI")
+        print("[INFO] System tray icon created")
+        print("[INFO] Right click = Menu | Double click = GUI")
 
-        # Timer per aggiornamenti
+        # Update timer
         timer = QTimer()
         timer.timeout.connect(lambda: None)
         timer.start(100)
 
-        # Avvia Qt event loop (BLOCCANTE)
+        # Start Qt event loop (BLOCKING)
         sys.exit(_qt_app.exec())
 
     except Exception as e:
         print(f"[ERROR] Tray icon: {e}")
         import traceback
+
         traceback.print_exc()
 
 
-def update_tray_menu():
-    """Aggiorna menu."""
+def update_tray_menu() -> None:
+    """Update the tray logic menu interface."""
     update_menu()
 
 
-def stop_tray_icon():
-    """Ferma tray icon."""
+def stop_tray_icon() -> None:
+    """Stop the tray icon and perform cleanup."""
     cleanup_qt()
 
 
-def get_tray_icon():
-    """Ritorna tray icon."""
+def get_tray_icon() -> QSystemTrayIcon:
+    """Return the raw Qt tray icon object.
+
+    Returns:
+        QSystemTrayIcon: The active tray icon or None.
+    """
     return _tray_icon
 
 
@@ -266,8 +294,8 @@ def get_tray_icon():
 # ============================================================================
 
 __all__ = [
-    'create_and_run_tray_icon',
-    'update_tray_menu',
-    'stop_tray_icon',
-    'get_tray_icon',
+    "create_and_run_tray_icon",
+    "update_tray_menu",
+    "stop_tray_icon",
+    "get_tray_icon",
 ]

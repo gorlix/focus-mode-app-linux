@@ -1,37 +1,42 @@
 """
 gui/material_theme.py
-Modulo per creare interfacce Tkinter con stile Material 3.
-Richiede: ttkbootstrap (pip install ttkbootstrap)
+Module for creating Tkinter interfaces with Material 3 styling.
+Requires: ttkbootstrap (pip install ttkbootstrap)
 """
 
 import ttkbootstrap as ttk
-from ttkbootstrap.constants import *
+from ttkbootstrap.constants import *  # noqa: F403
 from tkinter import Listbox
 
 # ============================================================================
 # PALETTE COLORI MATERIAL 3
 # ============================================================================
 
+
 class MaterialColors:
-    """Palette Material 3 Design (Light Theme)"""
-    PRIMARY = "#6750A4"           # Viola principale
-    SECONDARY = "#625B71"         # Grigio secondario
-    TERTIARY = "#7D5260"          # Rosa terziario
-    ERROR = "#B3261E"             # Rosso errore
-    SURFACE = "#FEF7FF"           # Sfondo superficie
-    SURFACE_VARIANT = "#E7E0EC"   # Variante superficie
-    ON_PRIMARY = "#FFFFFF"        # Testo su primario
-    ON_SURFACE = "#1C1B1F"        # Testo su superficie
-    ON_SURFACE_VARIANT = "#49454F" # Testo secondario
-    OUTLINE = "#79747E"           # Bordi
-    SHADOW = "#000000"            # Ombre
+    """Material 3 Design Palette (Light Theme)."""
+
+    PRIMARY = "#6750A4"  # Viola principale
+    SECONDARY = "#625B71"  # Grigio secondario
+    TERTIARY = "#7D5260"  # Rosa terziario
+    ERROR = "#B3261E"  # Rosso errore
+    SURFACE = "#FEF7FF"  # Sfondo superficie
+    SURFACE_VARIANT = "#E7E0EC"  # Variante superficie
+    ON_PRIMARY = "#FFFFFF"  # Testo su primario
+    ON_SURFACE = "#1C1B1F"  # Testo su superficie
+    ON_SURFACE_VARIANT = "#49454F"  # Testo secondario
+    OUTLINE = "#79747E"  # Bordi
+    SHADOW = "#000000"  # Ombre
+
 
 # ============================================================================
 # CONFIGURAZIONE FONT
 # ============================================================================
 
+
 class MaterialFonts:
-    """Font Material Design (Roboto)"""
+    """Material Design Fonts (Roboto)."""
+
     DISPLAY = ("Roboto", 24, "bold")
     HEADLINE = ("Roboto", 18, "bold")
     TITLE = ("Roboto", 16, "bold")
@@ -39,143 +44,154 @@ class MaterialFonts:
     LABEL = ("Roboto", 12, "bold")
     CAPTION = ("Roboto", 11)
 
+
 # ============================================================================
 # APPLICAZIONE STILE GLOBALE
 # ============================================================================
 
+
 def apply_material3_style(root, theme="flatly"):
-    """
-    Applica lo stile Material 3 all'applicazione Tkinter.
-    
+    """Apply the Material 3 style to the main Tkinter application.
+
     Args:
-        root: Finestra principale Tkinter/ttkbootstrap
-        theme: Tema ttkbootstrap (flatly, cosmo, litera, minty, lumen, ecc.)
-    
+        root: The main Tkinter/ttkbootstrap window instance.
+        theme (str): Background ttkbootstrap theme to base off (e.g., flatly).
+
     Returns:
-        Style: Oggetto Style configurato
+        ttk.Style: The configured Style object.
     """
     style = ttk.Style(theme=theme)
-    
+
     # Configurazione generale della finestra
     root.configure(bg=MaterialColors.SURFACE)
-    
+
     # Label
-    style.configure('Material.TLabel',
-                    font=MaterialFonts.BODY,
-                    background=MaterialColors.SURFACE,
-                    foreground=MaterialColors.ON_SURFACE)
-    
+    style.configure(
+        "Material.TLabel",
+        font=MaterialFonts.BODY,
+        background=MaterialColors.SURFACE,
+        foreground=MaterialColors.ON_SURFACE,
+    )
+
     # Titoli
-    style.configure('MaterialTitle.TLabel',
-                    font=MaterialFonts.HEADLINE,
-                    background=MaterialColors.SURFACE,
-                    foreground=MaterialColors.ON_SURFACE)
-    
+    style.configure(
+        "MaterialTitle.TLabel",
+        font=MaterialFonts.HEADLINE,
+        background=MaterialColors.SURFACE,
+        foreground=MaterialColors.ON_SURFACE,
+    )
+
     # Entry
-    style.configure('Material.TEntry',
-                    font=MaterialFonts.BODY,
-                    foreground=MaterialColors.ON_SURFACE,
-                    fieldbackground=MaterialColors.SURFACE_VARIANT,
-                    borderwidth=1,
-                    relief="flat")
-    
+    style.configure(
+        "Material.TEntry",
+        font=MaterialFonts.BODY,
+        foreground=MaterialColors.ON_SURFACE,
+        fieldbackground=MaterialColors.SURFACE_VARIANT,
+        borderwidth=1,
+        relief="flat",
+    )
+
     # Button
-    style.configure('MaterialPrimary.TButton',
-                    font=MaterialFonts.LABEL,
-                    background=MaterialColors.PRIMARY,
-                    foreground=MaterialColors.ON_PRIMARY,
-                    borderwidth=0,
-                    focuscolor='none',
-                    padding=(16, 8))
-    
-    style.configure('MaterialSecondary.TButton',
-                    font=MaterialFonts.LABEL,
-                    background=MaterialColors.SECONDARY,
-                    foreground=MaterialColors.ON_PRIMARY,
-                    borderwidth=0,
-                    focuscolor='none',
-                    padding=(16, 8))
-    
+    style.configure(
+        "MaterialPrimary.TButton",
+        font=MaterialFonts.LABEL,
+        background=MaterialColors.PRIMARY,
+        foreground=MaterialColors.ON_PRIMARY,
+        borderwidth=0,
+        focuscolor="none",
+        padding=(16, 8),
+    )
+
+    style.configure(
+        "MaterialSecondary.TButton",
+        font=MaterialFonts.LABEL,
+        background=MaterialColors.SECONDARY,
+        foreground=MaterialColors.ON_PRIMARY,
+        borderwidth=0,
+        focuscolor="none",
+        padding=(16, 8),
+    )
+
     # Frame
-    style.configure('Material.TFrame',
-                    background=MaterialColors.SURFACE)
-    
+    style.configure("Material.TFrame", background=MaterialColors.SURFACE)
+
     return style
+
 
 # ============================================================================
 # WIDGET HELPERS - MATERIAL 3
 # ============================================================================
 
+
 def material_label(master, text, style_type="body", **kwargs):
-    """
-    Crea una Label Material 3.
-    
+    """Create a Material 3 styled Label.
+
     Args:
-        master: Parent widget
-        text: Testo da mostrare
-        style_type: "body" o "title"
-        **kwargs: Altri argomenti per ttk.Label
-    
+        master: The parent widget.
+        text (str): The text to display.
+        style_type (str): "body" or "title" to dictate font scale.
+        **kwargs: Additional arguments for ttk.Label.
+
     Returns:
-        ttk.Label: Label configurata
+        ttk.Label: The configured Label widget.
     """
     if style_type == "title":
-        label = ttk.Label(master, text=text, style='MaterialTitle.TLabel', **kwargs)
+        label = ttk.Label(master, text=text, style="MaterialTitle.TLabel", **kwargs)
     else:
-        label = ttk.Label(master, text=text, style='Material.TLabel', **kwargs)
+        label = ttk.Label(master, text=text, style="Material.TLabel", **kwargs)
     return label
 
 
 def material_entry(master, placeholder="", **kwargs):
-    """
-    Crea un Entry Material 3.
-    
+    """Create a Material 3 styled Entry field.
+
     Args:
-        master: Parent widget
-        placeholder: Testo placeholder (non nativo in tkinter)
-        **kwargs: Altri argomenti per ttk.Entry
-    
+        master: The parent widget.
+        placeholder (str): Placeholder text (Note: not native to core tkinter).
+        **kwargs: Additional arguments for ttk.Entry.
+
     Returns:
-        ttk.Entry: Entry configurato
+        ttk.Entry: The configured Entry widget.
     """
-    entry = ttk.Entry(master, style='Material.TEntry', **kwargs)
+    entry = ttk.Entry(master, style="Material.TEntry", **kwargs)
     return entry
 
 
 def material_button(master, text, command, button_type="primary", **kwargs):
-    """
-    Crea un Button Material 3.
-    
+    """Create a Material 3 styled Button.
+
     Args:
-        master: Parent widget
-        text: Testo bottone
-        command: Funzione callback
-        button_type: "primary" o "secondary"
-        **kwargs: Altri argomenti per ttk.Button
-    
+        master: The parent widget.
+        text (str): Button text.
+        command (Callable): The callback function to execute on click.
+        button_type (str): "primary" or "secondary".
+        **kwargs: Additional arguments for ttk.Button.
+
     Returns:
-        ttk.Button: Button configurato
+        ttk.Button: The configured Button widget.
     """
     if button_type == "primary":
-        btn = ttk.Button(master, text=text, command=command, 
-                        bootstyle="primary", **kwargs)
+        btn = ttk.Button(
+            master, text=text, command=command, bootstyle="primary", **kwargs
+        )
     else:
-        btn = ttk.Button(master, text=text, command=command,
-                        bootstyle="secondary", **kwargs)
+        btn = ttk.Button(
+            master, text=text, command=command, bootstyle="secondary", **kwargs
+        )
     return btn
 
 
 def material_listbox(master, **kwargs):
-    """
-    Crea una Listbox con stile Material 3.
-    (Nota: Listbox standard tkinter, non ttk, quindi styling limitato)
-    
+    """Create a Listbox with Material 3 styling.
+
+    Note: Uses standard tkinter Listbox (not ttk), so styling is limited to colors and fonts.
+
     Args:
-        master: Parent widget
-        **kwargs: Altri argomenti per Listbox
-    
+        master: The parent widget.
+        **kwargs: Additional arguments for Listbox.
+
     Returns:
-        Listbox: Listbox configurata
+        Listbox: The configured Listbox widget.
     """
     listbox = Listbox(
         master,
@@ -187,85 +203,84 @@ def material_listbox(master, **kwargs):
         bd=0,
         highlightthickness=0,
         relief="flat",
-        **kwargs
+        **kwargs,
     )
     return listbox
 
 
 def material_frame(master, **kwargs):
-    """
-    Crea un Frame Material 3.
-    
+    """Create a Material 3 styled Frame.
+
     Args:
-        master: Parent widget
-        **kwargs: Altri argomenti per ttk.Frame
-    
+        master: The parent widget.
+        **kwargs: Additional arguments for ttk.Frame.
+
     Returns:
-        ttk.Frame: Frame configurato
+        ttk.Frame: The configured Frame widget.
     """
-    frame = ttk.Frame(master, style='Material.TFrame', **kwargs)
+    frame = ttk.Frame(master, style="Material.TFrame", **kwargs)
     return frame
 
 
 def material_scrollbar(master, **kwargs):
-    """
-    Crea una Scrollbar Material 3.
-    
+    """Create a Material 3 styled Scrollbar.
+
     Args:
-        master: Parent widget
-        **kwargs: Altri argomenti per ttk.Scrollbar
-    
+        master: The parent widget.
+        **kwargs: Additional arguments for ttk.Scrollbar.
+
     Returns:
-        ttk.Scrollbar: Scrollbar configurata
+        ttk.Scrollbar: The configured Scrollbar widget.
     """
     scrollbar = ttk.Scrollbar(master, bootstyle="rounded", **kwargs)
     return scrollbar
+
 
 # ============================================================================
 # LAYOUT HELPERS
 # ============================================================================
 
+
 def add_padding(widget, padx=8, pady=8):
-    """
-    Aggiunge padding uniforme a un widget già creato.
-    
+    """Add uniform padding to an already created widget using pack_configure.
+
     Args:
-        widget: Widget tkinter/ttk
-        padx: Padding orizzontale
-        pady: Padding verticale
+        widget: The tkinter/ttk widget.
+        padx (int): Horizontal padding.
+        pady (int): Vertical padding.
     """
     widget.pack_configure(padx=padx, pady=pady)
 
 
 def create_card_frame(master, padx=16, pady=16):
-    """
-    Crea un frame "card" Material con padding e sfondo.
-    
+    """Create a Material "card" frame with padding and background.
+
     Args:
-        master: Parent widget
-        padx: Padding interno orizzontale
-        pady: Padding interno verticale
-    
+        master: The parent widget.
+        padx (int): Internal horizontal padding.
+        pady (int): Internal vertical padding.
+
     Returns:
-        ttk.Frame: Frame configurato come card
+        ttk.Frame: The Frame configured as a card.
     """
     card = material_frame(master)
     card.configure(relief="flat", borderwidth=0)
     card.pack(fill="both", expand=True, padx=padx, pady=pady)
     return card
 
+
 # ============================================================================
 # UTILITY
 # ============================================================================
 
+
 def set_window_center(window, width, height):
-    """
-    Centra la finestra sullo schermo.
-    
+    """Center a Tkinter window on the primary screen.
+
     Args:
-        window: Finestra tkinter
-        width: Larghezza finestra
-        height: Altezza finestra
+        window: The Tkinter window instance.
+        width (int): Target width of the window.
+        height (int): Target height of the window.
     """
     screen_width = window.winfo_screenwidth()
     screen_height = window.winfo_screenheight()
@@ -273,26 +288,26 @@ def set_window_center(window, width, height):
     y = (screen_height - height) // 2
     window.geometry(f"{width}x{height}+{x}+{y}")
 
+
 # ============================================================================
 # EXPORT
 # ============================================================================
 
 __all__ = [
     # Classi colori e font
-    'MaterialColors',
-    'MaterialFonts',
+    "MaterialColors",
+    "MaterialFonts",
     # Applicazione stile
-    'apply_material3_style',
+    "apply_material3_style",
     # Widget factory
-    'material_label',
-    'material_entry',
-    'material_button',
-    'material_listbox',
-    'material_frame',
-    'material_scrollbar',
+    "material_label",
+    "material_entry",
+    "material_button",
+    "material_listbox",
+    "material_frame",
+    "material_scrollbar",
     # Layout helpers
-    'add_padding',
-    'create_card_frame',
-    'set_window_center',
+    "add_padding",
+    "create_card_frame",
+    "set_window_center",
 ]
-

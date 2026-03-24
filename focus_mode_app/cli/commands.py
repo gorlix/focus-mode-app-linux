@@ -1,8 +1,8 @@
 """
 cli/commands.py
-Comandi CLI per Focus Mode App.
-Interfaccia command-line per gestire app bloccate, sessioni, restore e focus lock.
-Supporta sia timer countdown che target time per il focus lock.
+CLI commands for the Focus Mode App.
+Command-line interface to manage blocked apps, sessions, restore, and focus lock.
+Supports both countdown timers and target times for the focus lock.
 """
 
 from rich.console import Console
@@ -13,7 +13,7 @@ from rich import box
 from focus_mode_app.core.storage import (
     add_blocked_item,
     remove_blocked_item,
-    get_blocked_items
+    get_blocked_items,
 )
 from focus_mode_app.core.blocker import (
     is_blocking_active,
@@ -21,66 +21,72 @@ from focus_mode_app.core.blocker import (
     toggle_blocking,
     set_restore_enabled,
     is_restore_enabled,
-    get_blocking_stats
+    get_blocking_stats,
 )
 
 console = Console()
 
 
 # ============================================================================
-# COMANDI STATUS E INFORMAZIONI
+# STATUS AND INFO COMMANDS
 # ============================================================================
 
-def cmd_status():
-    """
-    Mostra lo stato corrente del blocco, sessione e focus lock.
-    Include informazioni su blocco attivo, elementi bloccati, app da ripristinare e timer.
+
+def cmd_status() -> None:
+    """Show the current status of the block, session, and focus lock.
+
+    Includes information on whether the block is active, blocked items count,
+    apps to restore, and the focus lock timer.
     """
     stats = get_blocking_stats()
 
-    status_emoji = "🔒" if stats['blocking_active'] else "🔓"
-    status_text = "ATTIVO" if stats['blocking_active'] else "DISATTIVO"
-    status_color = "green" if stats['blocking_active'] else "red"
+    status_emoji = "🔒" if stats["blocking_active"] else "🔓"
+    status_text = "ACTIVE" if stats["blocking_active"] else "INACTIVE"
+    status_color = "green" if stats["blocking_active"] else "red"
 
-    restore_info = f"Apps da ripristinare: [cyan]{stats['apps_to_restore_count']}[/]"
-    restore_status = f"Auto-restore: [bold]{'ABILITATO' if stats['auto_restore_enabled'] else 'DISABILITATO'}[/]"
+    restore_info = f"Apps to restore: [cyan]{stats['apps_to_restore_count']}[/]"
+    restore_status = f"Auto-restore: [bold]{'ENABLED' if stats['auto_restore_enabled'] else 'DISABLED'}[/]"
 
-    lock_info = stats.get('focus_lock', {})
-    if lock_info.get('locked'):
-        lock_status = f"🔒 Focus Lock: [red]ATTIVO[/] - {lock_info['remaining_time']} rimanenti"
+    lock_info = stats.get("focus_lock", {})
+    if lock_info.get("locked"):
+        lock_status = (
+            f"🔒 Focus Lock: [red]ACTIVE[/] - {lock_info['remaining_time']} remaining"
+        )
     else:
-        lock_status = "Focus Lock: [green]Nessun lock attivo[/]"
+        lock_status = "Focus Lock: [green]No active lock[/]"
 
     console.print()
-    console.print(Panel(
-        f"[bold {status_color}]{status_emoji} Blocco {status_text}[/]\n\n"
-        f"Elementi bloccati: [cyan]{stats['blocked_items_count']}[/]\n"
-        f"App killate in sessione: [yellow]{stats['killed_apps_in_session']}[/]\n"
-        f"{restore_info}\n"
-        f"{restore_status}\n"
-        f"{lock_status}\n"
-        f"Intervallo controllo: [dim]{stats['blocking_interval']}s[/]",
-        title="📊 Stato Focus Mode App",
-        border_style="blue",
-        box=box.ROUNDED
-    ))
+    console.print(
+        Panel(
+            f"[bold {status_color}]{status_emoji} Block {status_text}[/]\n\n"
+            f"Blocked items: [cyan]{stats['blocked_items_count']}[/]\n"
+            f"Apps killed in session: [yellow]{stats['killed_apps_in_session']}[/]\n"
+            f"{restore_info}\n"
+            f"{restore_status}\n"
+            f"{lock_status}\n"
+            f"Check interval: [dim]{stats['blocking_interval']}s[/]",
+            title="📊 Focus Mode App Status",
+            border_style="blue",
+            box=box.ROUNDED,
+        )
+    )
 
 
-def cmd_list():
-    """
-    Lista tutti gli elementi bloccati (app native e webapp).
-    Visualizza tipo e nome di ogni elemento con indice numerico.
+def cmd_list() -> None:
+    """List all blocked elements (native apps and webapps).
+
+    Displays the type and name of each element with a numeric index.
     """
     items = get_blocked_items()
 
     if not items:
-        console.print("\n[yellow]ℹ️  Nessun elemento bloccato[/]\n")
+        console.print("\n[yellow]ℹ️  No blocked elements[/]\n")
         return
 
-    table = Table(title="🚫 Elementi Bloccati", box=box.ROUNDED)
+    table = Table(title="🚫 Blocked Elements", box=box.ROUNDED)
     table.add_column("#", style="dim", width=4)
-    table.add_column("Tipo", style="cyan", width=10)
-    table.add_column("Nome/URL", style="white")
+    table.add_column("Type", style="cyan", width=10)
+    table.add_column("Name/URL", style="white")
 
     for idx, item in enumerate(items, 1):
         emoji = "📱" if item["type"] == "app" else "🌐"
@@ -92,10 +98,10 @@ def cmd_list():
     console.print()
 
 
-def cmd_list_restore():
-    """
-    Lista tutte le app configurate per il restore automatico.
-    Mostra quali app verranno ripristinate quando il blocco viene disattivato.
+def cmd_list_restore() -> None:
+    """List all apps configured for automatic restoration.
+
+    Shows which apps will be restored when the block is deactivated.
     """
     try:
         from focus_mode_app.core.session import session_tracker
@@ -103,10 +109,10 @@ def cmd_list_restore():
         restore_list = session_tracker.restore_list
 
         if not restore_list:
-            console.print("\n[yellow]ℹ️  Nessuna app configurata per restore[/]\n")
+            console.print("\n[yellow]ℹ️  No apps configured for restore[/]\n")
             return
 
-        table = Table(title="♻️ App Configurate per Auto-Restore", box=box.ROUNDED)
+        table = Table(title="♻️ Apps Configured for Auto-Restore", box=box.ROUNDED)
         table.add_column("#", style="dim", width=4)
         table.add_column("App", style="cyan")
 
@@ -118,45 +124,45 @@ def cmd_list_restore():
         console.print()
 
     except Exception as e:
-        console.print(f"\n[red]❌ Errore: {e}[/]\n")
+        console.print(f"\n[red]❌ Error: {e}[/]\n")
 
 
 # ============================================================================
-# COMANDI GESTIONE ELEMENTI BLOCCATI
+# BLOCKED ITEMS MANAGEMENT COMMANDS
 # ============================================================================
 
-def cmd_add(name: str, item_type: str):
-    """
-    Aggiunge un elemento alla lista bloccati.
+
+def cmd_add(name: str, item_type: str) -> None:
+    """Add an element to the blocklist.
 
     Args:
-        name: Nome app o URL webapp
-        item_type: Tipo elemento ('app' o 'webapp')
+        name (str): App name or webapp URL.
+        item_type (str): Element type ('app' or 'webapp').
     """
-    if item_type not in ['app', 'webapp']:
-        console.print(f"\n[red]❌ Tipo non valido: {item_type}[/]")
-        console.print("[yellow]Usa 'app' o 'webapp'[/]\n")
+    if item_type not in ["app", "webapp"]:
+        console.print(f"\n[red]❌ Invalid type: {item_type}[/]")
+        console.print("[yellow]Use 'app' or 'webapp'[/]\n")
         return
 
     if add_blocked_item(name, item_type):
         emoji = "📱" if item_type == "app" else "🌐"
-        console.print(f"\n[green]✅ {emoji} '{name}' aggiunto alla lista![/]\n")
+        console.print(f"\n[green]✅ {emoji} '{name}' added to the list![/]\n")
     else:
-        console.print(f"\n[yellow]⚠️  '{name}' già presente nella lista[/]\n")
+        console.print(f"\n[yellow]⚠️  '{name}' is already in the list[/]\n")
 
 
-def cmd_remove(identifier: str):
-    """
-    Rimuove un elemento dalla lista bloccati.
-    Accetta indice numerico (1-based) o nome esatto dell'elemento.
+def cmd_remove(identifier: str) -> None:
+    """Remove an element from the blocklist.
+
+    Accepts a 1-based numeric index or the exact name of the element.
 
     Args:
-        identifier: Indice (numero) o nome esatto dell'elemento
+        identifier (str): The index (number) or exact name of the element.
     """
     items = get_blocked_items()
 
     if not items:
-        console.print("\n[yellow]ℹ️  Lista vuota, niente da rimuovere[/]\n")
+        console.print("\n[yellow]ℹ️  List is empty, nothing to remove[/]\n")
         return
 
     try:
@@ -164,7 +170,7 @@ def cmd_remove(identifier: str):
         if 0 <= index < len(items):
             item_name = items[index]["name"]
             if remove_blocked_item(index):
-                console.print(f"\n[green]✅ '{item_name}' rimosso![/]\n")
+                console.print(f"\n[green]✅ '{item_name}' removed![/]\n")
                 return
     except ValueError:
         pass
@@ -172,33 +178,34 @@ def cmd_remove(identifier: str):
     for idx, item in enumerate(items):
         if item["name"] == identifier:
             if remove_blocked_item(idx):
-                console.print(f"\n[green]✅ '{identifier}' rimosso![/]\n")
+                console.print(f"\n[green]✅ '{identifier}' removed![/]\n")
                 return
 
-    console.print(f"\n[red]❌ Elemento '{identifier}' non trovato[/]\n")
+    console.print(f"\n[red]❌ Element '{identifier}' not found[/]\n")
 
 
 # ============================================================================
-# COMANDI GESTIONE BLOCCO
+# BLOCK MANAGEMENT COMMANDS
 # ============================================================================
 
-def cmd_start():
-    """Attiva il blocco dei processi."""
+
+def cmd_start() -> None:
+    """Activate process blocking."""
     if is_blocking_active():
-        console.print("\n[yellow]ℹ️  Il blocco è già attivo[/]\n")
+        console.print("\n[yellow]ℹ️  Block is already active[/]\n")
         return
 
     set_blocking_active(True)
-    console.print("\n[green]🔒 Blocco ATTIVATO - App verranno bloccate[/]\n")
+    console.print("\n[green]🔒 Block ACTIVATED - Apps will be blocked[/]\n")
 
 
-def cmd_stop():
-    """
-    Disattiva il blocco dei processi.
-    Controlla focus lock prima di permettere disattivazione.
+def cmd_stop() -> None:
+    """Deactivate process blocking.
+
+    Checks focus lock status before permitting deactivation.
     """
     if not is_blocking_active():
-        console.print("\n[yellow]ℹ️  Il blocco è già disattivo[/]\n")
+        console.print("\n[yellow]ℹ️  Block is already inactive[/]\n")
         return
 
     from focus_mode_app.core.blocker import can_disable_blocking
@@ -209,26 +216,27 @@ def cmd_stop():
         return
 
     set_blocking_active(False)
-    console.print("\n[red]🔓 Blocco DISATTIVATO[/]\n")
+    console.print("\n[red]🔓 Block DEACTIVATED[/]\n")
 
     try:
         from focus_mode_app.core.session import session_tracker
-        from focus_mode_app.core.notifications import notify_restore_complete
 
         killed_apps = session_tracker.get_killed_apps()
 
         if killed_apps:
             restored = len(killed_apps)
-            console.print(f"[green]✅ Auto-restore completato: {restored} app ripristinate[/]\n")
+            console.print(
+                f"[green]✅ Auto-restore completed: {restored} apps restored[/]\n"
+            )
     except Exception as e:
-        console.print(f"[yellow]⚠️  Errore durante auto-restore: {e}[/]\n")
+        console.print(f"[yellow]⚠️  Error during auto-restore: {e}[/]\n")
 
 
-def cmd_toggle():
-    """
-    Inverti lo stato del blocco (attivo <-> disattivato).
-    Gestisce anche il restore automatico alla disattivazione.
-    Controlla focus lock prima di disattivare.
+def cmd_toggle() -> None:
+    """Toggle the block state (active <-> inactive).
+
+    Also handles automatic restoration upon deactivation.
+    Checks focus lock status before disabling.
     """
     if is_blocking_active():
         from focus_mode_app.core.blocker import can_disable_blocking
@@ -241,52 +249,52 @@ def cmd_toggle():
     new_state = toggle_blocking()
 
     if new_state:
-        console.print("\n[green]🔒 Blocco ATTIVATO[/]\n")
+        console.print("\n[green]🔒 Block ACTIVATED[/]\n")
     else:
-        console.print("\n[red]🔓 Blocco DISATTIVATO[/]\n")
+        console.print("\n[red]🔓 Block DEACTIVATED[/]\n")
 
 
 # ============================================================================
-# COMANDI GESTIONE RESTORE
+# RESTORE MANAGEMENT COMMANDS
 # ============================================================================
 
-def cmd_add_restore(app_name: str):
-    """
-    Aggiunge un'app alla lista di restore automatico.
-    L'app verrà ripristinata quando il blocco viene disattivato.
+
+def cmd_add_restore(app_name: str) -> None:
+    """Add an app to the automatic restore list.
+
+    The app will be restored when the block is deactivated.
 
     Args:
-        app_name: Nome app da aggiungere a restore
+        app_name (str): Name of the app to add to the restore list.
     """
     try:
         from focus_mode_app.core.session import session_tracker
 
         session_tracker.add_to_restore(app_name)
-        console.print(f"\n[green]✅ '{app_name}' aggiunto a auto-restore![/]\n")
+        console.print(f"\n[green]✅ '{app_name}' added to auto-restore![/]\n")
     except Exception as e:
-        console.print(f"\n[red]❌ Errore: {e}[/]\n")
+        console.print(f"\n[red]❌ Error: {e}[/]\n")
 
 
-def cmd_remove_restore(app_name: str):
-    """
-    Rimuove un'app dalla lista di restore automatico.
+def cmd_remove_restore(app_name: str) -> None:
+    """Remove an app from the automatic restore list.
 
     Args:
-        app_name: Nome app da rimuovere da restore
+        app_name (str): Name of the app to remove from the restore list.
     """
     try:
         from focus_mode_app.core.session import session_tracker
 
         session_tracker.remove_from_restore(app_name)
-        console.print(f"\n[green]✅ '{app_name}' rimosso da auto-restore![/]\n")
+        console.print(f"\n[green]✅ '{app_name}' removed from auto-restore![/]\n")
     except Exception as e:
-        console.print(f"\n[red]❌ Errore: {e}[/]\n")
+        console.print(f"\n[red]❌ Error: {e}[/]\n")
 
 
-def cmd_restore():
-    """
-    Ripristina manualmente tutte le app killate nella sessione corrente.
-    Utile per forzare il restore senza aspettare la disattivazione del blocco.
+def cmd_restore() -> None:
+    """Manually restore all apps killed in the current session.
+
+    Useful to force restore without waiting for block deactivation.
     """
     try:
         from focus_mode_app.core.restore import restore_all_apps
@@ -295,160 +303,166 @@ def cmd_restore():
         apps = session_tracker.get_killed_apps()
 
         if not apps:
-            console.print("\n[yellow]ℹ️  Nessuna app da ripristinare[/]\n")
+            console.print("\n[yellow]ℹ️  No apps to restore[/]\n")
             return
 
-        console.print(f"\n[cyan]♻️  Ripristino {len(apps)} app...[/]")
+        console.print(f"\n[cyan]♻️  Restoring {len(apps)} apps...[/]")
         restored = restore_all_apps()
-        console.print(f"[green]✅ Ripristinate {restored} app![/]\n")
+        console.print(f"[green]✅ Restored {restored} apps![/]\n")
 
     except Exception as e:
-        console.print(f"\n[red]❌ Errore: {e}[/]\n")
+        console.print(f"\n[red]❌ Error: {e}[/]\n")
 
 
-def cmd_toggle_restore():
-    """
-    Abilita o disabilita il restore automatico per la sessione corrente.
-    Permette di controllare se le app verranno ripristinate automaticamente.
+def cmd_toggle_restore() -> None:
+    """Enable or disable automatic restore for the current session.
+
+    Allows controlling whether apps will be restored automatically.
     """
     current_state = is_restore_enabled()
     new_state = not current_state
 
     set_restore_enabled(new_state)
 
-    status = "ABILITATO" if new_state else "DISABILITATO"
+    status = "ENABLED" if new_state else "DISABLED"
     console.print(f"\n[cyan]Auto-restore {status}[/]\n")
 
 
 # ============================================================================
-# COMANDI GESTIONE FOCUS LOCK
+# FOCUS LOCK MANAGEMENT COMMANDS
 # ============================================================================
 
-def cmd_set_timer(minutes: int):
-    """
-    Attiva focus lock con timer countdown.
+
+def cmd_set_timer(minutes: int) -> None:
+    """Activate focus lock with a countdown timer.
 
     Args:
-        minutes: Durata timer in minuti
+        minutes (int): Timer duration in minutes.
     """
     try:
         from focus_mode_app.core.focus_lock import focus_lock
 
         if focus_lock.set_timer_lock(minutes):
-            console.print(f"\n[green]🔒 Focus Lock attivato: {minutes} minuti[/]\n")
+            console.print(f"\n[green]🔒 Focus Lock activated: {minutes} minutes[/]\n")
 
             if not is_blocking_active():
                 cmd_start()
         else:
-            console.print("\n[red]❌ Errore attivazione timer[/]\n")
+            console.print("\n[red]❌ Error activating timer[/]\n")
 
     except Exception as e:
-        console.print(f"\n[red]❌ Errore: {e}[/]\n")
+        console.print(f"\n[red]❌ Error: {e}[/]\n")
 
 
-def cmd_set_target_time(hour: int, minute: int):
-    """
-    Attiva focus lock fino a orario target.
-    Supporta orario di domani se l'ora è già passata.
+def cmd_set_target_time(hour: int, minute: int) -> None:
+    """Activate focus lock until a target time.
+
+    Supports setting the time for tomorrow if the hour has already passed today.
 
     Args:
-        hour: Ora target (0-23)
-        minute: Minuto target (0-59)
+        hour (int): Target hour (0-23).
+        minute (int): Target minute (0-59).
     """
     try:
         from focus_mode_app.core.focus_lock import focus_lock
 
         if not (0 <= hour <= 23 and 0 <= minute <= 59):
-            console.print("\n[red]❌ Ora non valida (HH: 0-23, MM: 0-59)[/]\n")
+            console.print("\n[red]❌ Invalid time (HH: 0-23, MM: 0-59)[/]\n")
             return
 
         if focus_lock.set_target_time_lock(hour, minute):
-            console.print(f"\n[green]🔒 Target Time Lock attivato: fino alle {hour:02d}:{minute:02d}[/]\n")
+            console.print(
+                f"\n[green]🔒 Target Time Lock activated: until {hour:02d}:{minute:02d}[/]\n"
+            )
 
             if not is_blocking_active():
                 cmd_start()
         else:
-            console.print("\n[red]❌ Errore attivazione target time[/]\n")
+            console.print("\n[red]❌ Error activating target time[/]\n")
 
     except Exception as e:
-        console.print(f"\n[red]❌ Errore: {e}[/]\n")
+        console.print(f"\n[red]❌ Error: {e}[/]\n")
 
 
-def cmd_lock_status():
-    """Mostra stato focus lock con countdown e dettagli."""
+def cmd_lock_status() -> None:
+    """Show focus lock status with countdown and details."""
     try:
         from focus_mode_app.core.focus_lock import focus_lock
 
         info = focus_lock.get_lock_info()
 
-        if info['locked']:
-            mode = "⏲️  TIMER" if info['mode'] == "timer" else "🕐 TARGET TIME"
+        if info["locked"]:
+            mode = "⏲️  TIMER" if info["mode"] == "timer" else "🕐 TARGET TIME"
 
             console.print()
-            console.print(Panel(
-                f"[red]🔒 FOCUS LOCK ATTIVO[/]\n\n"
-                f"Modalità: [cyan]{mode}[/]\n"
-                f"Tempo rimanente: [yellow]{info['remaining_time']}[/]\n"
-                f"Scadenza: [cyan]{info['end_time']}[/]\n"
-                f"Progress: [cyan]{info['progress_percentage']:.1f}%[/]",
-                title="Focus Lock Status",
-                border_style="red",
-                box=box.ROUNDED
-            ))
+            console.print(
+                Panel(
+                    f"[red]🔒 FOCUS LOCK ACTIVE[/]\n\n"
+                    f"Mode: [cyan]{mode}[/]\n"
+                    f"Remaining time: [yellow]{info['remaining_time']}[/]\n"
+                    f"End time: [cyan]{info['end_time']}[/]\n"
+                    f"Progress: [cyan]{info['progress_percentage']:.1f}%[/]",
+                    title="Focus Lock Status",
+                    border_style="red",
+                    box=box.ROUNDED,
+                )
+            )
             console.print()
         else:
-            console.print("\n[green]✅ Nessun lock attivo[/]\n")
+            console.print("\n[green]✅ No active lock[/]\n")
 
     except ImportError:
-        console.print("\n[yellow]⚠️  Focus lock non disponibile[/]\n")
+        console.print("\n[yellow]⚠️  Focus lock unavailable[/]\n")
     except Exception as e:
-        console.print(f"\n[red]❌ Errore: {e}[/]\n")
+        console.print(f"\n[red]❌ Error: {e}[/]\n")
 
 
-def cmd_clear_lock():
-    """
-    Rimuove focus lock manualmente (force unlock).
-    Richiede conferma dell'utente.
+def cmd_clear_lock() -> None:
+    """Manually remove focus lock (force unlock).
+
+    Requires user confirmation.
     """
     try:
         from focus_mode_app.core.focus_lock import focus_lock
         from rich.prompt import Confirm
 
         if not focus_lock.is_locked():
-            console.print("\n[yellow]ℹ️  Nessun lock attivo[/]\n")
+            console.print("\n[yellow]ℹ️  No active lock[/]\n")
             return
 
-        if Confirm.ask("\n[red]⚠️  Sbloccare manualmente il focus lock?[/]"):
+        if Confirm.ask("\n[red]⚠️  Manually unlock the focus lock?[/]"):
             focus_lock.force_unlock()
-            console.print("\n[green]✅ Focus lock rimosso![/]\n")
+            console.print("\n[green]✅ Focus lock removed![/]\n")
         else:
-            console.print("\n[yellow]Operazione annullata[/]\n")
+            console.print("\n[yellow]Operation cancelled[/]\n")
 
     except Exception as e:
-        console.print(f"\n[red]❌ Errore: {e}[/]\n")
+        console.print(f"\n[red]❌ Error: {e}[/]\n")
 
 
 # ============================================================================
-# COMANDI GESTIONE LISTA
+# LIST MANAGEMENT COMMANDS
 # ============================================================================
 
-def cmd_clear():
-    """
-    Rimuove tutti gli elementi dalla lista bloccati.
-    Richiede conferma dell'utente prima di procedere.
+
+def cmd_clear() -> None:
+    """Remove all elements from the blocklist.
+
+    Requires user confirmation before proceeding.
     """
     if not get_blocked_items():
-        console.print("\n[yellow]ℹ️  Lista già vuota[/]\n")
+        console.print("\n[yellow]ℹ️  List is already empty[/]\n")
         return
 
     from rich.prompt import Confirm
 
-    if Confirm.ask("\n[red]⚠️  Rimuovere TUTTI gli elementi?[/]"):
+    if Confirm.ask("\n[red]⚠️  Remove ALL elements?[/]"):
         from focus_mode_app.core.storage import clear_blocked_items
+
         clear_blocked_items()
-        console.print("\n[green]✅ Lista svuotata![/]\n")
+        console.print("\n[green]✅ List cleared![/]\n")
     else:
-        console.print("\n[yellow]Operazione annullata[/]\n")
+        console.print("\n[yellow]Operation cancelled[/]\n")
 
 
 # ============================================================================
@@ -456,21 +470,21 @@ def cmd_clear():
 # ============================================================================
 
 __all__ = [
-    'cmd_status',
-    'cmd_list',
-    'cmd_list_restore',
-    'cmd_add',
-    'cmd_remove',
-    'cmd_start',
-    'cmd_stop',
-    'cmd_toggle',
-    'cmd_add_restore',
-    'cmd_remove_restore',
-    'cmd_restore',
-    'cmd_toggle_restore',
-    'cmd_set_timer',
-    'cmd_set_target_time',
-    'cmd_lock_status',
-    'cmd_clear_lock',
-    'cmd_clear',
+    "cmd_status",
+    "cmd_list",
+    "cmd_list_restore",
+    "cmd_add",
+    "cmd_remove",
+    "cmd_start",
+    "cmd_stop",
+    "cmd_toggle",
+    "cmd_add_restore",
+    "cmd_remove_restore",
+    "cmd_restore",
+    "cmd_toggle_restore",
+    "cmd_set_timer",
+    "cmd_set_target_time",
+    "cmd_lock_status",
+    "cmd_clear_lock",
+    "cmd_clear",
 ]

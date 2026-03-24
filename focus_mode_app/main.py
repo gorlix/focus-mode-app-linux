@@ -1,14 +1,14 @@
 """
 main.py
-Entry point principale dell'applicazione Focus Mode App.
-Gestisce inizializzazione, caricamento risorse e avvio thread principali.
-Integra session restore per il ripristino app automatico.
+Main entry point for the Focus Mode application.
+Handles initialization, resource loading, and main thread execution.
+Integrates session restoration for automatic app recovery.
 """
 
 import sys
 import threading
-import os
 import signal
+from typing import Optional
 
 from focus_mode_app.config import load_config
 from focus_mode_app.core.storage import load_blocked_items
@@ -18,38 +18,45 @@ from focus_mode_app.gui.main_window import AppGui
 from focus_mode_app.utils.tray_icon import create_and_run_tray_icon, stop_tray_icon
 
 
-_blocking_thread = None
-_tray_thread = None
-_app_instance = None
+_blocking_thread: Optional[threading.Thread] = None
+_tray_thread: Optional[threading.Thread] = None
+_app_instance: Optional[AppGui] = None
 
 
-def cleanup_handlers():
-    """Ferma i thread prima di uscire."""
+def cleanup_handlers() -> None:
+    """Stop all active threads and clean up before exiting."""
     try:
         set_blocking_active(False)
 
         try:
             stop_tray_icon()
-        except:
+        except Exception:
             pass
 
-    except:
+    except Exception:
         pass
 
 
-def signal_handler(signum, frame):
-    """Gestisce segnali di interruzione."""
-    print("\n[INFO] Segnale di interruzione ricevuto")
+def signal_handler(signum: int, frame: Optional[object]) -> None:
+    """Handle termination signals to gracefully shut down the app.
+
+    Args:
+        signum (int): The signal number received.
+        frame (Optional[object]): The current stack frame.
+    """
+    print("\n[INFO] Termination signal received")
     cleanup_handlers()
     sys.exit(0)
 
 
-def main():
+def main() -> None:
+    """Initialize and run the Focus Mode App.
+
+    Loads the configuration and persistent data, explicitly spawns the
+    background blocking thread and the system tray thread, and starts
+    the main GUI event loop.
     """
-    Funzione principale che avvia l'applicazione Focus Mode App.
-    Inizializza configurazione, carica dati persistenti, avvia GUI e thread worker.
-    """
-    print("[INFO] Avvio Focus Mode App...")
+    print("[INFO] Starting Focus Mode App...")
 
     global _blocking_thread, _tray_thread, _app_instance
 
@@ -65,45 +72,43 @@ def main():
     signal.signal(signal.SIGTERM, signal_handler)
 
     # ========================================================================
-    # AVVIA THREAD BLOCCO PROCESSI
+    # START BLOCKING THREAD
     # ========================================================================
 
     _blocking_thread = threading.Thread(
-        target=start_blocking_loop,
-        daemon=True,
-        name="BlockingThread"
+        target=start_blocking_loop, daemon=True, name="BlockingThread"
     )
     _blocking_thread.start()
-    print("[INFO] Thread di blocco avviato")
+    print("[INFO] Blocking thread started")
 
     # ========================================================================
-    # AVVIA THREAD TRAY ICON
+    # START TRAY ICON THREAD
     # ========================================================================
 
     _tray_thread = threading.Thread(
         target=create_and_run_tray_icon,
         args=(_app_instance,),
         daemon=True,
-        name="TrayThread"
+        name="TrayThread",
     )
     _tray_thread.start()
-    print("[INFO] Thread system tray avviato")
+    print("[INFO] System tray thread started")
 
     # ========================================================================
-    # MAINLOOP GUI
+    # GUI MAINLOOP
     # ========================================================================
 
     try:
         _app_instance.mainloop()
 
     except KeyboardInterrupt:
-        print("\n[INFO] Interruzione da tastiera")
+        print("\n[INFO] Keyboard Interrupt received")
 
     except Exception as e:
-        print(f"[ERROR] Errore mainloop: {e}")
+        print(f"[ERROR] Mainloop error: {e}")
 
     finally:
-        print("[INFO] Chiusura applicazione...")
+        print("[INFO] Closing application...")
         cleanup_handlers()
         sys.exit(0)
 

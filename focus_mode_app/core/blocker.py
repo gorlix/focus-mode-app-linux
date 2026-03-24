@@ -11,7 +11,11 @@ import time
 import psutil
 from typing import Set, Tuple
 
-from focus_mode_app.config import BLOCKING_INTERVAL, BLOCKING_ACTIVE_ON_STARTUP, AUTO_RESTORE_ENABLED
+from focus_mode_app.config import (
+    BLOCKING_INTERVAL,
+    BLOCKING_ACTIVE_ON_STARTUP,
+    AUTO_RESTORE_ENABLED,
+)
 
 blocking_active = BLOCKING_ACTIVE_ON_STARTUP
 
@@ -24,22 +28,21 @@ _restore_enabled_this_session = AUTO_RESTORE_ENABLED
 # CONTROLLO STATO BLOCCO
 # ============================================================================
 
+
 def is_blocking_active() -> bool:
-    """
-    Ritorna lo stato corrente del blocco.
+    """Check the current state of the blocking mechanism.
 
     Returns:
-        bool: True se il blocco è attivo, False altrimenti
+        bool: True if the blocker is actively killing processes, False otherwise.
     """
     return blocking_active
 
 
 def set_blocking_active(active: bool) -> None:
-    """
-    Imposta lo stato del blocco.
+    """Explicitly enable or disable the process blocking mechanism.
 
     Args:
-        active: True per attivare, False per disattivare
+        active (bool): True to activate the blocker, False to deactivate.
     """
     global blocking_active
     blocking_active = active
@@ -52,12 +55,13 @@ def set_blocking_active(active: bool) -> None:
 
 
 def can_disable_blocking() -> Tuple[bool, str]:
-    """
-    Verifica se è possibile disattivare il blocco.
-    Controlla focus lock prima di permettere disattivazione.
+    """Verify if the user is currently allowed to disable the blocker.
+
+    Checks if a Focus Lock (timer or target time) is currently active.
 
     Returns:
-        Tuple[bool, str]: (can_disable, reason)
+        Tuple[bool, str]: A tuple containing a boolean indicating if disabling is allowed,
+                          and a string with the reason or status.
     """
     if not blocking_active:
         return (True, "Blocco già disattivo")
@@ -75,13 +79,13 @@ def can_disable_blocking() -> Tuple[bool, str]:
 
 
 def toggle_blocking() -> bool:
-    """
-    Inverte lo stato del blocco (attivo <-> disattivato).
-    Gestisce auto-restore alla disattivazione.
-    Controlla focus lock prima di disattivare.
+    """Toggle the current blocking state (active/inactive).
+
+    Handles Focus Lock checks before disabing and triggers auto-restore
+    if the blocker is successfully turned off.
 
     Returns:
-        bool: Nuovo stato del blocco
+        bool: The new state of the blocker (True if active).
     """
     global blocking_active
 
@@ -108,9 +112,9 @@ def toggle_blocking() -> bool:
 
 
 def _handle_auto_restore() -> None:
-    """
-    Gestisce il ripristino automatico app killate quando blocco viene disattivato.
-    Eseguito solo se auto_restore è abilitato.
+    """Handle automatic restoration of killed applications.
+
+    Triggered when the blocker is disabled, provided auto-restore is enabled.
     """
     if not _restore_enabled_this_session:
         print("[INFO] Auto-restore disabilitato per questa sessione")
@@ -137,11 +141,10 @@ def _handle_auto_restore() -> None:
 
 
 def set_restore_enabled(enabled: bool) -> None:
-    """
-    Abilita o disabilita il restore automatico per questa sessione.
+    """Enable or disable the auto-restore feature for the current session.
 
     Args:
-        enabled: True per abilitare, False per disabilitare
+        enabled (bool): True to enable auto-restore, False to disable.
     """
     global _restore_enabled_this_session
     _restore_enabled_this_session = enabled
@@ -151,11 +154,10 @@ def set_restore_enabled(enabled: bool) -> None:
 
 
 def is_restore_enabled() -> bool:
-    """
-    Ritorna lo stato del restore automatico.
+    """Check if automatic restoration is currently enabled.
 
     Returns:
-        bool: True se auto-restore è abilitato
+        bool: True if auto-restore is active for this session.
     """
     return _restore_enabled_this_session
 
@@ -164,13 +166,14 @@ def is_restore_enabled() -> bool:
 # BLOCCO PROCESSI
 # ============================================================================
 
+
 def kill_blocked_apps() -> int:
-    """
-    Blocca tutte le app native nella lista.
-    Traccia app killate se nella restore list.
+    """Iterate through native system processes and kill those in the blocklist.
+
+    Tracks successfully killed applications for future session restoration.
 
     Returns:
-        int: Numero di processi killati
+        int: The number of application processes successfully killed.
     """
     if not blocking_active:
         return 0
@@ -190,19 +193,19 @@ def kill_blocked_apps() -> int:
         app_name = item["name"].lower()
 
         try:
-            for proc in psutil.process_iter(['name', 'pid']):
+            for proc in psutil.process_iter(["name", "pid"]):
                 try:
-                    proc_name = proc.info['name'].lower()
-                    proc_pid = proc.info['pid']
+                    proc_name = proc.info["name"].lower()
+                    proc_pid = proc.info["pid"]
 
                     if app_name in proc_name and proc_pid != current_pid:
-
                         if proc_pid not in _killed_pids:
                             print(f"[INFO] Killing app: {app_name} (PID {proc_pid})")
                             _killed_pids.add(proc_pid)
 
                             try:
                                 from focus_mode_app.core.session import session_tracker
+
                                 app_state = session_tracker.capture_app_state(proc)
                                 if app_state:
                                     session_tracker.add_killed_app(app_name, app_state)
@@ -222,12 +225,13 @@ def kill_blocked_apps() -> int:
 
 
 def kill_blocked_webapps() -> int:
-    """
-    Blocca tutte le webapp nella lista cercando nella command line dei processi.
-    Traccia webapp killate se nella restore list.
+    """Iterate through process command lines to find and kill blocked web applications.
+
+    Useful for stopping specific sub-processes of browsers (like Chrome/Firefox tabs)
+    by searching for the webapp URL in the launch arguments.
 
     Returns:
-        int: Numero di processi killati
+        int: The number of web application processes successfully killed.
     """
     if not blocking_active:
         return 0
@@ -246,26 +250,30 @@ def kill_blocked_webapps() -> int:
         webapp_string = item["name"]
 
         try:
-            for proc in psutil.process_iter(['cmdline', 'pid']):
+            for proc in psutil.process_iter(["cmdline", "pid"]):
                 try:
-                    cmdline_list = proc.info['cmdline']
+                    cmdline_list = proc.info["cmdline"]
                     if not cmdline_list:
                         continue
 
-                    cmdline_str = ' '.join(cmdline_list)
-                    proc_pid = proc.info['pid']
+                    cmdline_str = " ".join(cmdline_list)
+                    proc_pid = proc.info["pid"]
 
                     if webapp_string in cmdline_str:
-
                         if proc_pid not in _killed_pids:
-                            print(f"[INFO] Killing webapp: {webapp_string} (PID {proc_pid})")
+                            print(
+                                f"[INFO] Killing webapp: {webapp_string} (PID {proc_pid})"
+                            )
                             _killed_pids.add(proc_pid)
 
                             try:
                                 from focus_mode_app.core.session import session_tracker
+
                                 app_state = session_tracker.capture_app_state(proc)
                                 if app_state:
-                                    session_tracker.add_killed_app(webapp_string, app_state)
+                                    session_tracker.add_killed_app(
+                                        webapp_string, app_state
+                                    )
                             except Exception as e:
                                 print(f"[WARNING] Session capture error: {e}")
 
@@ -283,11 +291,10 @@ def kill_blocked_webapps() -> int:
 
 
 def kill_all_blocked_items() -> int:
-    """
-    Blocca tutti gli elementi (app + webapp) nella lista.
+    """Execute the killing routine for both native apps and web applications.
 
     Returns:
-        int: Numero totale di processi killati
+        int: Total number of processes killed across all categories.
     """
     if not blocking_active:
         return 0
@@ -303,13 +310,13 @@ def kill_all_blocked_items() -> int:
 # LOOP DI MONITORAGGIO
 # ============================================================================
 
-def start_blocking_loop() -> None:
-    """
-    Avvia il loop infinito di monitoraggio e blocco processi.
-    Questa funzione deve essere eseguita in un thread separato.
 
-    Il loop continua finché l'applicazione è attiva.
-    L'intervallo tra i controlli è definito in config.BLOCKING_INTERVAL.
+def start_blocking_loop() -> None:
+    """Start an infinite loop to monitor and block active processes.
+
+    This function should be executed in a separate daemon thread to avoid blocking
+    the main GUI loop. It continuously checks running processes at intervals
+    defined by `BLOCKING_INTERVAL`.
     """
     print(f"[INFO] Loop di blocco avviato (intervallo: {BLOCKING_INTERVAL}s)")
 
@@ -333,9 +340,10 @@ def start_blocking_loop() -> None:
 
 
 def cleanup_killed_pids() -> None:
-    """
-    Pulisce il set dei PID tracciati.
-    Utile per reset e cleanup della memoria.
+    """Clear the set of actively tracked PIDs.
+
+    Useful for resetting the internal state and cleaning up memory
+    between completely different blocking sessions.
     """
     global _killed_pids
     _killed_pids.clear()
@@ -346,27 +354,29 @@ def cleanup_killed_pids() -> None:
 # STATISTICHE
 # ============================================================================
 
+
 def get_blocking_stats() -> dict:
-    """
-    Ritorna statistiche sul blocco, session restore e focus lock.
+    """Retrieve current statistics regarding the blocker, session restore, and focus lock.
 
     Returns:
-        dict: Dizionario con statistiche di blocco, restore e lock
+        dict: A dictionary containing active stats like block count, lock duration, etc.
     """
     from focus_mode_app.core.storage import blocked_items
 
     try:
         from focus_mode_app.core.session import session_tracker
+
         killed_apps_count = len(session_tracker.get_killed_apps())
         restore_list_count = len(session_tracker.restore_list)
-    except:
+    except Exception:
         killed_apps_count = 0
         restore_list_count = 0
 
     try:
         from focus_mode_app.core.focus_lock import focus_lock
+
         lock_info = focus_lock.get_lock_info()
-    except:
+    except Exception:
         lock_info = {"locked": False}
 
     return {
@@ -386,17 +396,17 @@ def get_blocking_stats() -> dict:
 # ============================================================================
 
 __all__ = [
-    'blocking_active',
-    'is_blocking_active',
-    'set_blocking_active',
-    'toggle_blocking',
-    'can_disable_blocking',
-    'set_restore_enabled',
-    'is_restore_enabled',
-    'kill_blocked_apps',
-    'kill_blocked_webapps',
-    'kill_all_blocked_items',
-    'start_blocking_loop',
-    'get_blocking_stats',
-    'cleanup_killed_pids',
+    "blocking_active",
+    "is_blocking_active",
+    "set_blocking_active",
+    "toggle_blocking",
+    "can_disable_blocking",
+    "set_restore_enabled",
+    "is_restore_enabled",
+    "kill_blocked_apps",
+    "kill_blocked_webapps",
+    "kill_all_blocked_items",
+    "start_blocking_loop",
+    "get_blocking_stats",
+    "cleanup_killed_pids",
 ]
