@@ -18,6 +18,7 @@ from focus_mode_app.core.blocker import (
     can_disable_blocking,
     set_blocking_active
 )
+from focus_mode_app.core.focus_lock import focus_lock as _focus_lock
 from focus_mode_app.core.storage import (
     add_blocked_item,
     remove_blocked_item,
@@ -74,8 +75,15 @@ class AppGui(ttk.Window):
         try:
             while True:
                 msg = self.api_queue.get_nowait()
-                if msg.get("action") == "toggle":
+                action = msg.get("action")
+                if action == "toggle":
                     self.on_remote_toggle(msg["active"])
+                elif action == "lock":
+                    self.on_remote_lock(msg)
+                elif action == "unlock":
+                    self.on_remote_unlock()
+                elif action == "set_restore":
+                    self.on_remote_set_restore(msg["enabled"])
                 self.api_queue.task_done()
         except queue.Empty:
             pass
@@ -120,7 +128,7 @@ class AppGui(ttk.Window):
         Crea pannello timer/target time per focus lock.
         Permette di impostare timer countdown o ora target.
         """
-        timer_frame = ttk.LabelFrame(
+        timer_frame = ttk.Labelframe(
             parent,
             text="FOCUS LOCK",
             bootstyle="warning",
@@ -259,31 +267,37 @@ class AppGui(ttk.Window):
 
     def update_timer_display(self):
         """
-        Aggiorna display timer ogni secondo.
-        Mostra countdown e gestisce stato bottone disattiva.
+        Aggiorna il display del focus lock ogni secondo.
+        Distingue tra HA Lock (indefinito, GUI bloccata) e lock timer/target.
         """
         try:
-            from focus_mode_app.core.focus_lock import focus_lock
-
-            if focus_lock.is_locked():
-                info = focus_lock.get_lock_info()
+            if _focus_lock.is_ha_locked():
+                # HA Lock — indefinito, solo API può rimuoverlo
                 self.timer_status_label.config(
-                    text=f"LOCKED - {info['remaining_time']} rimanenti",
+                    text="LOCKED by HA — Solo Home Assistant può sbloccare",
+                    foreground="darkred"
+                )
+                self.toggle_btn.config(state="disabled")
+                self.btn_activate_lock.config(state="disabled")
+
+            elif _focus_lock.is_locked():
+                info = _focus_lock.get_lock_info()
+                self.timer_status_label.config(
+                    text=f"LOCKED — {info['remaining_time']} rimanenti",
                     foreground="red"
                 )
-
                 if is_blocking_active():
                     self.toggle_btn.config(state="disabled")
+                self.btn_activate_lock.config(state="normal")
+
             else:
                 self.timer_status_label.config(
                     text="Nessun lock attivo",
                     foreground="gray"
                 )
-
                 self.toggle_btn.config(state="normal")
+                self.btn_activate_lock.config(state="normal")
 
-        except ImportError:
-            pass
         except Exception as e:
             print(f"[ERROR] Timer display update: {e}")
 
@@ -295,7 +309,7 @@ class AppGui(ttk.Window):
         Permette all'utente di selezionare quali app ripristinare quando
         il blocco viene disattivato.
         """
-        restore_frame = ttk.LabelFrame(
+        restore_frame = ttk.Labelframe(
             parent,
             text="AUTO-RESTORE ON DISABLE",
             bootstyle="info",
@@ -340,7 +354,7 @@ class AppGui(ttk.Window):
 
     def _create_blocked_section(self, parent):
         """Crea la sezione per gestire elementi bloccati (app e webapp)."""
-        section = ttk.LabelFrame(
+        section = ttk.Labelframe(
             parent,
             text="Elementi Bloccati",
             bootstyle="primary",
@@ -422,7 +436,7 @@ class AppGui(ttk.Window):
         self.feedback_label.pack(pady=(8, 0))
 
     def _create_action_buttons(self, parent):
-        """Crea i bottoni azioni principali (aggiorna, esci)."""
+        """Crea i bottoni azioni principali (aggiorna, impostazioni HA, esci)."""
         actions_frame = ttk.Frame(parent)
         actions_frame.pack(fill="x", pady=(8, 0))
 
@@ -434,6 +448,14 @@ class AppGui(ttk.Window):
         )
         btn_refresh.pack(side="left", expand=True, fill="x", padx=(0, 4))
 
+        btn_ha = ttk.Button(
+            actions_frame,
+            text="Impostazioni HA",
+            command=self._open_ha_settings,
+            bootstyle="info-outline"
+        )
+        btn_ha.pack(side="left", expand=True, fill="x", padx=(0, 4))
+
         btn_quit = ttk.Button(
             actions_frame,
             text="Esci",
@@ -441,6 +463,17 @@ class AppGui(ttk.Window):
             bootstyle="danger"
         )
         btn_quit.pack(side="right", expand=True, fill="x", padx=(4, 0))
+
+    def _open_ha_settings(self):
+        """
+        Apre il dialog di configurazione integrazione Home Assistant.
+        Se già aperto porta in primo piano senza aprirne uno secondo.
+        """
+        from focus_mode_app.gui.ha_settings_dialog import HASettingsDialog
+        if hasattr(self, "_ha_dialog") and self._ha_dialog.winfo_exists():
+            self._ha_dialog.lift()
+            return
+        self._ha_dialog = HASettingsDialog(self)
 
     # ========================================================================
     # GESTIONE BLOCCO
@@ -480,12 +513,54 @@ class AppGui(ttk.Window):
 
     def on_remote_toggle(self, active: bool):
         """
-        Gestisce l'azione di toggle ricevuta dalla coda API.
-        Mutala stato del blocker sul thread principale GUI in modo sicuro.
+        Gestisce il toggle ricevuto dalla coda API sul thread GUI principale.
         """
         set_blocking_active(active)
         self.update_toggle_button()
         update_tray_menu()
+
+    def on_remote_lock(self, msg: dict):
+        """
+        Attiva un focus lock ricevuto dalla coda API.
+        Avvia anche il blocco se non già attivo.
+        """
+        mode = msg.get("mode")
+        if mode == "timer":
+            _focus_lock.set_timer_lock(msg["minutes"])
+        elif mode == "target":
+            _focus_lock.set_target_time_lock(msg["hour"], msg["minute"])
+        elif mode == "ha":
+            _focus_lock.set_ha_lock()
+
+        if not is_blocking_active():
+            toggle_blocking()
+            self.update_toggle_button()
+        update_tray_menu()
+
+    def on_remote_unlock(self):
+        """
+        Rimuove qualsiasi focus lock attivo (incluso HA Lock) dalla coda API.
+        Riabilita i controlli GUI bloccati dall'HA Lock.
+        """
+        _focus_lock.clear_lock()
+        self.toggle_btn.config(state="normal")
+        self.btn_activate_lock.config(state="normal")
+
+    def on_remote_set_restore(self, enabled: bool):
+        """
+        Aggiorna lo stato auto-restore e il relativo pulsante GUI dalla coda API.
+        """
+        set_restore_enabled(enabled)
+        if enabled:
+            self.restore_toggle_btn.config(
+                text="SOSPENDI AUTO-RESTORE",
+                bootstyle="warning-outline"
+            )
+        else:
+            self.restore_toggle_btn.config(
+                text="ABILITA AUTO-RESTORE",
+                bootstyle="success-outline"
+            )
 
     # ========================================================================
     # GESTIONE RESTORE
@@ -549,13 +624,13 @@ class AppGui(ttk.Window):
 
     def refresh_restore_list(self):
         """Aggiorna la listbox con le app da ripristinare."""
-        self.restore_listbox.delete(0, ttk.END)
+        self.restore_listbox.delete(0, "end")
 
         try:
             from focus_mode_app.core.session import session_tracker
 
             for app_name in session_tracker.restore_list.keys():
-                self.restore_listbox.insert(ttk.END, f"{app_name}")
+                self.restore_listbox.insert("end", f"{app_name}")
         except Exception as e:
             print(f"[ERROR] Refresh restore list: {e}")
 
@@ -609,9 +684,9 @@ class AppGui(ttk.Window):
             return
 
         if add_blocked_item(name, item_type):
-            self.listbox.insert(ttk.END, f"{name}")
+            self.listbox.insert("end", f"{name}")
             self.show_feedback(f"{name} aggiunto e salvato!")
-            self.entry.delete(0, ttk.END)
+            self.entry.delete(0, "end")
         else:
             self.show_feedback("Elemento già presente o non valido")
 
@@ -648,12 +723,12 @@ class AppGui(ttk.Window):
         Sincronizza l'interfaccia con lo storage persistente.
         Usa get_blocked_items() per dati sempre aggiornati.
         """
-        self.listbox.delete(0, ttk.END)
+        self.listbox.delete(0, "end")
 
         items = get_blocked_items()
 
         for item in items:
-            self.listbox.insert(ttk.END, f"{item['name']}")
+            self.listbox.insert("end", f"{item['name']}")
 
         self.show_feedback(f"Elementi bloccati: {len(items)}")
 
