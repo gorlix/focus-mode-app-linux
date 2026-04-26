@@ -9,7 +9,7 @@ import atexit
 try:
     from PyQt6.QtWidgets import QApplication, QSystemTrayIcon, QMenu
     from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor, QFont
-    from PyQt6.QtCore import Qt, QTimer
+    from PyQt6.QtCore import Qt, QTimer, QObject, pyqtSignal
 except ImportError:
     print("[ERROR] PyQt6 non installato: pip install PyQt6")
     sys.exit(1)
@@ -23,6 +23,40 @@ _tray_icon = None
 _app_gui = None
 _qt_app = None
 _is_quitting = False
+_controller = None
+
+class TrayController(QObject):
+    update_menu_signal = pyqtSignal()
+    hide_signal = pyqtSignal()
+    quit_signal = pyqtSignal()
+
+    def __init__(self):
+        super().__init__()
+        self.update_menu_signal.connect(self.do_update_menu)
+        self.hide_signal.connect(self.do_hide)
+        self.quit_signal.connect(self.do_quit)
+
+    def do_update_menu(self):
+        if _tray_icon and not _is_quitting:
+            try:
+                menu = create_tray_menu()
+                _tray_icon.setContextMenu(menu)
+            except Exception:
+                pass
+
+    def do_hide(self):
+        if _tray_icon:
+            try:
+                _tray_icon.hide()
+            except Exception:
+                pass
+
+    def do_quit(self):
+        if _qt_app:
+            try:
+                _qt_app.quit()
+            except Exception:
+                pass
 
 
 # ============================================================================
@@ -81,13 +115,13 @@ def create_tray_menu():
 
 
 def update_menu():
-    """Aggiorna il menu."""
-    if _tray_icon and not _is_quitting:
+    """Aggiorna il menu usando il SIGNAL per il thread-safety."""
+    global _controller
+    if _controller and not _is_quitting:
         try:
-            menu = create_tray_menu()
-            _tray_icon.setContextMenu(menu)
-        except Exception:
-            pass
+            _controller.update_menu_signal.emit()
+        except Exception as e:
+            print(f"[ERROR] update_menu signal emit failed: {e}")
 
 
 # ============================================================================
@@ -171,20 +205,15 @@ def on_tray_activated(reason):
 # ============================================================================
 
 def cleanup_qt():
-    """Cleanup per evitare crash."""
-    global _is_quitting
+    """Cleanup per evitare crash cross-thread."""
+    global _is_quitting, _controller
 
     _is_quitting = True
 
-    if _tray_icon:
+    if _controller:
         try:
-            _tray_icon.hide()
-        except Exception:
-            pass
-
-    if _qt_app:
-        try:
-            _qt_app.quit()
+            _controller.hide_signal.emit()
+            _controller.quit_signal.emit()
         except Exception:
             pass
 
@@ -211,6 +240,9 @@ def create_and_run_tray_icon(app_gui=None):
         _qt_app = QApplication.instance()
         if _qt_app is None:
             _qt_app = QApplication(sys.argv)
+
+        global _controller
+        _controller = TrayController()
 
         # Crea icona
         pixmap = create_tray_icon_pixmap()
