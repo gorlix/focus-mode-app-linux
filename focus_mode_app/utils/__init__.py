@@ -14,4 +14,3 @@ __all__ = [
     'update_tray_menu',
     'stop_tray_icon',
 ]
-

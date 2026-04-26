@@ -35,4 +35,3 @@ __all__ = [
     'toggle_blocking',
     'start_blocking_loop',
 ]
-

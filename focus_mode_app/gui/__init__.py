@@ -8,4 +8,3 @@ from .main_window import AppGui
 __all__ = [
     'AppGui',
 ]
-

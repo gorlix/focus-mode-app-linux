@@ -1,7 +1,7 @@
 # 📚 Modalità Studio
 
 Applicazione desktop per bloccare app e webapp distraenti durante le sessioni di studio o lavoro. Sviluppata con Python e design Material 3.
- 
+
 Caratteristiche
 
 - 🎯 **Blocco app native** - Termina automaticamente processi di applicazioni specifiche
