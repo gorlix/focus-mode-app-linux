@@ -28,9 +28,10 @@ API_AUTH_TOKEN_FILE = DATA_DIR / "auth_token.txt"
 # WEBHOOK & NOTIFICATIONS
 # ---------------------------------------------------------------------------- #
 
-# Hardcoded for the current requirements, but can become environment variables
-HA_WEBHOOK_URL = "http://homeassistant.local:8123/api/webhook/focus_mode_offline"
-"""str: The endpoint to hit when the API server stops unexpectedly or shuts down."""
+# Il webhook URL viene caricato a runtime da core.ha_config (data/ha_config.json).
+# Non è definito qui per evitare che venga baked-in all'avvio: in questo modo
+# l'URL aggiornato via GUI di impostazioni è applicato al prossimo dying gasp
+# senza richiedere il riavvio dell'applicazione.
 
 # ---------------------------------------------------------------------------- #
 # LOGGING

@@ -13,7 +13,7 @@ import requests
 import uvicorn
 
 from focus_mode_app.api.server import app
-from focus_mode_app.api.config import API_HOST, API_PORT, HA_WEBHOOK_URL
+from focus_mode_app.api.config import API_HOST, API_PORT
 from focus_mode_app.api.logger import api_logger
 
 
@@ -69,17 +69,25 @@ def stop_api() -> None:
     """
     global _api_server, _api_thread
 
-    # 1. Dying Gasp Webhook: Notify HA we are going down
-    api_logger.info("Executing Dying Gasp webhook to External Integrations.")
-    try:
-        requests.post(
-            HA_WEBHOOK_URL,
-            json={"status": "offline"},
-            timeout=2.0
-        )
-        api_logger.info("Dying Gasp sent successfully.")
-    except requests.RequestException as e:
-        api_logger.warning(f"Failed to send Dying Gasp webhook: {e}")
+    # 1. Dying Gasp Webhook: notifica HA che l'app sta andando offline.
+    #    L'URL viene letto a runtime da ha_config per supportare aggiornamenti
+    #    senza riavvio. Se non configurato, il passo viene saltato silenziosamente.
+    from focus_mode_app.core.ha_config import get_dying_gasp_url
+    dying_gasp_url = get_dying_gasp_url()
+
+    if not dying_gasp_url:
+        api_logger.info("Nessun URL dying gasp configurato — webhook saltato.")
+    else:
+        api_logger.info(f"Invio Dying Gasp a: {dying_gasp_url}")
+        try:
+            requests.post(
+                dying_gasp_url,
+                json={"event": "dying_gasp", "status": "offline"},
+                timeout=2.0
+            )
+            api_logger.info("Dying Gasp inviato con successo.")
+        except requests.RequestException as e:
+            api_logger.warning(f"Invio Dying Gasp fallito: {e}")
 
     # 2. Graceful Uvicorn Shutdown
     if _api_server is not None:
