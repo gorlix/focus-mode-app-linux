@@ -32,6 +32,7 @@ class StateResponse(BaseModel):
     active: bool = Field(..., description="Whether the blocker is currently killing processes.")
     blocked_items: List[BlockedItem] = Field(..., description="Array of all configured blocked items.")
     focus_lock: LockInfo = Field(..., description="Lock constraints currently in effect.")
+    restore_enabled: bool = Field(..., description="Whether auto-restore on disable is active.")
 
 
 class ToggleRequest(BaseModel):
@@ -48,3 +49,38 @@ class ToggleResponse(BaseModel):
     active: bool = Field(..., description="The resulting status of the blocker after the request.")
     status: str = Field(..., description="'success' or 'error' depending on the operation's outcome.")
     message: str = Field(..., description="Human readable context message regarding the operation.")
+
+
+class LockRequest(BaseModel):
+    """
+    Payload for activating a focus lock.
+    """
+    mode: str = Field(..., description="Lock mode: 'timer', 'target', or 'ha'.", json_schema_extra={"example": "timer"})
+    minutes: Optional[int] = Field(None, description="Duration in minutes (mode='timer' only).", json_schema_extra={"example": 25})
+    hour: Optional[int] = Field(None, description="Target hour 0-23 (mode='target' only).", json_schema_extra={"example": 14})
+    minute: Optional[int] = Field(None, description="Target minute 0-59 (mode='target' only).", json_schema_extra={"example": 30})
+
+
+class LockResponse(BaseModel):
+    """
+    Result of a lock operation.
+    """
+    locked: bool = Field(..., description="Whether a lock is currently active.")
+    mode: str = Field(..., description="Active lock mode: 'timer', 'target', 'ha', or 'none'.")
+    remaining_time: Optional[str] = Field(None, description="Remaining lock time (null for HA lock or no lock).")
+    message: str = Field(..., description="Human readable context message.")
+
+
+class RestoreRequest(BaseModel):
+    """
+    Payload for toggling auto-restore.
+    """
+    enabled: bool = Field(..., description="Set to true to enable auto-restore, false to disable.")
+
+
+class RestoreResponse(BaseModel):
+    """
+    Result of a restore toggle request.
+    """
+    enabled: bool = Field(..., description="The resulting auto-restore state.")
+    message: str = Field(..., description="Human readable context message.")
