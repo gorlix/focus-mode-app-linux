@@ -15,6 +15,7 @@ class LockMode(Enum):
     NONE = "none"
     TIMER = "timer"
     TARGET_TIME = "target_time"
+    HA_LOCK = "ha_lock"
 
 
 class FocusLock:
@@ -78,6 +79,24 @@ class FocusLock:
         print(f"[INFO] Target time lock attivato: fino alle {target_hour:02d}:{target_minute:02d}")
         return True
 
+    def set_ha_lock(self) -> bool:
+        """
+        Attiva lock indefinito da Home Assistant.
+        Solo un'azione via API può rimuoverlo — la GUI non può sbloccarlo.
+        """
+        self.lock_enabled = True
+        self.lock_mode = LockMode.HA_LOCK
+        self.lock_end_time = None
+        self.lock_start_time = time.time()
+        self.lock_duration = None
+
+        print("[INFO] HA Lock attivato — solo HA può rimuoverlo")
+        return True
+
+    def is_ha_locked(self) -> bool:
+        """True se è attivo un HA Lock (indefinito, rimovibile solo via API)."""
+        return self.lock_enabled and self.lock_mode == LockMode.HA_LOCK
+
     def is_locked(self) -> bool:
         """
         Verifica se il blocco è attivo.
@@ -87,6 +106,9 @@ class FocusLock:
         """
         if not self.lock_enabled:
             return False
+
+        if self.lock_mode == LockMode.HA_LOCK:
+            return True  # nessuna scadenza
 
         if self.lock_end_time is None:
             return False
@@ -167,6 +189,18 @@ class FocusLock:
                 "locked": False,
                 "mode": "none",
                 "remaining_time": "00:00"
+            }
+
+        if self.lock_mode == LockMode.HA_LOCK:
+            return {
+                "locked": True,
+                "mode": LockMode.HA_LOCK.value,
+                "duration_minutes": None,
+                "remaining_time": None,
+                "remaining_minutes": None,
+                "remaining_seconds": None,
+                "progress_percentage": 0.0,
+                "end_time": None
             }
 
         minutes, seconds = self.get_remaining_time()
