@@ -98,6 +98,7 @@ class AppGui(ttk.Window):
     def _create_widgets(self):
         """Crea tutti i widget dell'interfaccia principale."""
         main_frame = create_card_frame(self, padx=24, pady=24)
+        self._main_frame = main_frame
 
         self._create_title(main_frame)
         self._create_toggle_button(main_frame)
@@ -106,6 +107,7 @@ class AppGui(ttk.Window):
         self._create_blocked_section(main_frame)
         self._create_feedback_label(main_frame)
         self._create_action_buttons(main_frame)
+        self._create_ha_panel(main_frame)
 
     def _create_title(self, parent):
         """Crea il titolo principale dell'interfaccia."""
@@ -448,13 +450,13 @@ class AppGui(ttk.Window):
         )
         btn_refresh.pack(side="left", expand=True, fill="x", padx=(0, 4))
 
-        btn_ha = ttk.Button(
+        self._btn_ha = ttk.Button(
             actions_frame,
-            text="Impostazioni HA",
-            command=self._open_ha_settings,
+            text="Impostazioni HA ▼",
+            command=self._toggle_ha_panel,
             bootstyle="info-outline"
         )
-        btn_ha.pack(side="left", expand=True, fill="x", padx=(0, 4))
+        self._btn_ha.pack(side="left", expand=True, fill="x", padx=(0, 4))
 
         btn_quit = ttk.Button(
             actions_frame,
@@ -464,16 +466,22 @@ class AppGui(ttk.Window):
         )
         btn_quit.pack(side="right", expand=True, fill="x", padx=(4, 0))
 
-    def _open_ha_settings(self):
-        """
-        Apre il dialog di configurazione integrazione Home Assistant.
-        Se già aperto porta in primo piano senza aprirne uno secondo.
-        """
-        from focus_mode_app.gui.ha_settings_dialog import HASettingsDialog
-        if hasattr(self, "_ha_dialog") and self._ha_dialog.winfo_exists():
-            self._ha_dialog.lift()
-            return
-        self._ha_dialog = HASettingsDialog(self)
+    def _create_ha_panel(self, parent):
+        """Crea il pannello HA inline (inizialmente nascosto)."""
+        from focus_mode_app.gui.ha_settings_dialog import HASettingsPanel
+        self._ha_panel = HASettingsPanel(parent)
+        self._ha_panel_visible = False
+
+    def _toggle_ha_panel(self):
+        """Mostra/nasconde il pannello HA inline."""
+        if self._ha_panel_visible:
+            self._ha_panel.frame.pack_forget()
+            self._ha_panel_visible = False
+            self._btn_ha.config(text="Impostazioni HA ▼")
+        else:
+            self._ha_panel.frame.pack(fill="x", pady=(8, 0))
+            self._ha_panel_visible = True
+            self._btn_ha.config(text="Impostazioni HA ▲")
 
     # ========================================================================
     # GESTIONE BLOCCO
