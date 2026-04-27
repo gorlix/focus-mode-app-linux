@@ -1,243 +1,220 @@
 """
 gui/ha_settings_dialog.py
-Dialog modale per la configurazione dell'integrazione con Home Assistant.
+Popup per configurare l'integrazione con Home Assistant.
 
-Flusso:
-  1. L'utente inserisce l'URL di HA e il LLAT, poi clicca "Salva".
-  2. Clicca "Registra" per registrare il dispositivo su HA.
-  3. Il Webhook ID appare nel campo read-only.
-  4. L'utente copia il Webhook ID e lo incolla nella config flow del plugin HACS.
+Chiede due cose all'utente:
+  1. URL di Home Assistant (es. https://homeassistant.local:8123)
+  2. Long-Lived Access Token (LLAT)
+
+Il tasto "Salva" persiste la config; il tasto "Registra" chiama
+register_device() e mostra il Webhook ID da incollare nel plugin HACS.
+
+Usa composizione (owns a Toplevel) invece di ereditarietà per evitare
+un bug di ttkbootstrap che patcha tk.Toplevel.__init__ e rompe _register.
 """
 
 import threading
-
-import ttkbootstrap as ttk
-
-from focus_mode_app.core.ha_config import load_ha_config, save_ha_config, save_webhook_id
-from focus_mode_app.gui.material_theme import set_window_center
+import tkinter as tk
+from tkinter import font as tkfont
 
 
-class HASettingsDialog(ttk.Toplevel):
-    """Dialog modale per la configurazione HA (native app model)."""
+class HASettingsDialog:
+    """Popup modale per la configurazione HA (non eredita da Toplevel)."""
 
     def __init__(self, parent):
-        super().__init__(parent)
-        self.title("Impostazioni Home Assistant")
-        self.resizable(False, False)
-        self.grab_set()
-        self.transient(parent)
-        set_window_center(self, 520, 380)
+        win = tk.Toplevel(parent)
+        win.title("Impostazioni Home Assistant")
+        win.resizable(False, False)
+        win.grab_set()
+        win.transient(parent)
 
-        self._llat_visible = False
-        self._build()
-        self._load_saved_config()
+        # Centra rispetto al parent
+        w, h = 480, 360
+        px = parent.winfo_rootx() + max(0, (parent.winfo_width() - w) // 2)
+        py = parent.winfo_rooty() + max(0, (parent.winfo_height() - h) // 2)
+        win.geometry(f"{w}x{h}+{px}+{py}")
+
+        self._win = win
+        self._build(win)
+        self._load()
+
+    # Proxy per winfo_exists() usato da main_window.py
+    def winfo_exists(self) -> bool:
+        try:
+            return bool(self._win.winfo_exists())
+        except Exception:
+            return False
+
+    def lift(self):
+        self._win.lift()
 
     # ------------------------------------------------------------------
-    # UI
+    # Layout
     # ------------------------------------------------------------------
 
-    def _build(self):
-        outer = ttk.Frame(self, padding=16)
+    def _build(self, win):
+        bold = tkfont.Font(weight="bold")
+        pad = dict(padx=12, pady=4)
+
+        outer = tk.Frame(win, padx=16, pady=16)
         outer.pack(fill="both", expand=True)
 
-        self._build_ha_url_section(outer)
-        self._build_llat_section(outer)
-        self._build_webhook_section(outer)
-        self._build_actions(outer)
+        # ── URL HA ────────────────────────────────────────────────────
+        tk.Label(outer, text="URL di Home Assistant:", font=bold).pack(anchor="w")
+        tk.Label(
+            outer,
+            text="es: https://homeassistant.local:8123",
+            fg="gray",
+        ).pack(anchor="w")
+        self._url_var = tk.StringVar()
+        tk.Entry(outer, textvariable=self._url_var, width=56).pack(fill="x", **pad)
 
-        self._feedback_label = ttk.Label(outer, text="", font=("Roboto", 10))
-        self._feedback_label.pack(pady=(6, 0))
-
-    def _build_ha_url_section(self, parent):
-        frame = ttk.Labelframe(
-            parent,
-            text="URL di Home Assistant",
-            bootstyle="info",
-            padding=12,
-        )
-        frame.pack(fill="x", pady=(0, 10))
-
-        ttk.Label(
-            frame,
-            text="es: https://homeassistant.local:8123  oppure  https://home.esempio.it",
-            font=("Roboto", 9),
-            foreground="gray",
-        ).pack(anchor="w", pady=(0, 4))
-
-        self._ha_url_var = ttk.StringVar()
-        ttk.Entry(frame, textvariable=self._ha_url_var).pack(fill="x")
-
-    def _build_llat_section(self, parent):
-        frame = ttk.Labelframe(
-            parent,
-            text="Long-Lived Access Token HA (LLAT)",
-            bootstyle="warning",
-            padding=12,
-        )
-        frame.pack(fill="x", pady=(0, 10))
-
-        ttk.Label(
-            frame,
+        # ── LLAT ──────────────────────────────────────────────────────
+        tk.Label(
+            outer, text="Long-Lived Access Token (LLAT):", font=bold
+        ).pack(anchor="w", pady=(10, 0))
+        tk.Label(
+            outer,
             text="HA → Profilo → Sicurezza → Token di lunga durata",
-            font=("Roboto", 9),
-            foreground="gray",
-        ).pack(anchor="w", pady=(0, 4))
+            fg="gray",
+        ).pack(anchor="w")
 
-        row = ttk.Frame(frame)
-        row.pack(fill="x")
-
-        self._llat_var = ttk.StringVar()
-        self._llat_entry = ttk.Entry(row, textvariable=self._llat_var, show="*")
-        self._llat_entry.pack(side="left", fill="x", expand=True, padx=(0, 6))
-
-        self._llat_toggle_btn = ttk.Button(
-            row,
-            text="Mostra",
-            command=self._toggle_llat_visibility,
-            bootstyle="warning-outline",
+        llat_row = tk.Frame(outer)
+        llat_row.pack(fill="x", **pad)
+        self._llat_var = tk.StringVar()
+        self._llat_entry = tk.Entry(llat_row, textvariable=self._llat_var, show="*", width=47)
+        self._llat_entry.pack(side="left", fill="x", expand=True)
+        self._show_btn = tk.Button(
+            llat_row, text="Mostra", command=self._toggle_llat, width=8
         )
-        self._llat_toggle_btn.pack(side="right")
+        self._show_btn.pack(side="right", padx=(6, 0))
 
-    def _build_webhook_section(self, parent):
-        frame = ttk.Labelframe(
-            parent,
-            text="Webhook ID (generato dopo la registrazione)",
-            bootstyle="secondary",
-            padding=12,
+        # ── Webhook ID ────────────────────────────────────────────────
+        tk.Label(outer, text="Webhook ID:", font=bold).pack(
+            anchor="w", pady=(10, 0)
         )
-        frame.pack(fill="x", pady=(0, 10))
-
-        ttk.Label(
-            frame,
-            text="Copia questo ID nel config flow del plugin HACS su Home Assistant.",
-            font=("Roboto", 9),
-            foreground="gray",
-        ).pack(anchor="w", pady=(0, 4))
-
-        row = ttk.Frame(frame)
-        row.pack(fill="x")
-
-        self._webhook_id_var = ttk.StringVar()
-        ttk.Entry(
-            row,
-            textvariable=self._webhook_id_var,
+        wh_row = tk.Frame(outer)
+        wh_row.pack(fill="x", **pad)
+        self._wh_var = tk.StringVar()
+        tk.Entry(
+            wh_row,
+            textvariable=self._wh_var,
             state="readonly",
-        ).pack(side="left", fill="x", expand=True, padx=(0, 6))
-
-        self._copy_btn = ttk.Button(
-            row,
-            text="Copia",
-            command=self._copy_webhook_id,
-            bootstyle="secondary",
+            fg="blue",
+            width=47,
+        ).pack(side="left", fill="x", expand=True)
+        tk.Button(wh_row, text="Copia", command=self._copy_wh, width=8).pack(
+            side="right", padx=(6, 0)
         )
-        self._copy_btn.pack(side="right")
+        tk.Label(
+            outer,
+            text="Copia nel config flow del plugin HACS su Home Assistant.",
+            fg="gray",
+        ).pack(anchor="w")
 
-    def _build_actions(self, parent):
-        row = ttk.Frame(parent)
-        row.pack(fill="x", pady=(4, 0))
+        # ── Pulsanti ─────────────────────────────────────────────────
+        btn_row = tk.Frame(outer)
+        btn_row.pack(fill="x", pady=(14, 0))
 
-        ttk.Button(
-            row,
-            text="Salva",
-            command=self._save,
-            bootstyle="success",
-        ).pack(side="left", expand=True, fill="x", padx=(0, 4))
+        tk.Button(
+            btn_row, text="Salva", command=self._save,
+            bg="#4CAF50", fg="white", width=12,
+        ).pack(side="left", padx=(0, 6))
 
-        self._register_btn = ttk.Button(
-            row,
-            text="Registra dispositivo",
-            command=self._register,
-            bootstyle="primary",
+        self._reg_btn = tk.Button(
+            btn_row, text="Registra", command=self._register,
+            bg="#2196F3", fg="white", width=14,
         )
-        self._register_btn.pack(side="left", expand=True, fill="x", padx=(0, 4))
+        self._reg_btn.pack(side="left", padx=(0, 6))
 
-        ttk.Button(
-            row,
-            text="Chiudi",
-            command=self.destroy,
-            bootstyle="secondary",
-        ).pack(side="right", expand=True, fill="x")
+        tk.Button(
+            btn_row, text="Chiudi", command=win.destroy, width=10
+        ).pack(side="right")
+
+        # ── Feedback ─────────────────────────────────────────────────
+        self._feedback_var = tk.StringVar()
+        self._feedback_lbl = tk.Label(
+            outer, textvariable=self._feedback_var, fg="#388E3C"
+        )
+        self._feedback_lbl.pack(pady=(8, 0))
 
     # ------------------------------------------------------------------
     # Load / save
     # ------------------------------------------------------------------
 
-    def _load_saved_config(self):
+    def _load(self):
+        from focus_mode_app.core.ha_config import load_ha_config
         cfg = load_ha_config()
-        self._ha_url_var.set(cfg.get("ha_url", ""))
+        self._url_var.set(cfg.get("ha_url", ""))
         self._llat_var.set(cfg.get("llat", ""))
-        self._webhook_id_var.set(cfg.get("webhook_id", ""))
+        self._wh_var.set(cfg.get("webhook_id", ""))
 
     def _save(self):
-        ha_url = self._ha_url_var.get().strip()
+        from focus_mode_app.core.ha_config import save_ha_config
+        ha_url = self._url_var.get().strip()
         llat = self._llat_var.get().strip()
+        if not ha_url or not llat:
+            self._msg("Inserisci URL e Token prima di salvare.", error=True)
+            return
         if save_ha_config(llat=llat, ha_url=ha_url):
-            self._show_feedback("Configurazione salvata.")
+            self._msg("Configurazione salvata.")
         else:
-            self._show_feedback("Errore durante il salvataggio.")
+            self._msg("Errore durante il salvataggio.", error=True)
 
     # ------------------------------------------------------------------
     # Registration
     # ------------------------------------------------------------------
 
     def _register(self):
-        ha_url = self._ha_url_var.get().strip()
+        ha_url = self._url_var.get().strip()
         llat = self._llat_var.get().strip()
-
         if not ha_url or not llat:
-            self._show_feedback("Inserisci URL HA e LLAT prima di registrare.")
+            self._msg("Inserisci URL e Token prima di registrare.", error=True)
             return
-
-        self._register_btn.config(state="disabled", text="Registrazione...")
-        self._show_feedback("Connessione a Home Assistant...")
-
+        self._reg_btn.config(state="disabled", text="Registrazione…")
+        self._msg("Connessione a Home Assistant…")
         threading.Thread(
-            target=self._do_register,
-            args=(ha_url, llat),
-            daemon=True,
+            target=self._do_register, args=(ha_url, llat), daemon=True
         ).start()
 
     def _do_register(self, ha_url: str, llat: str):
-        """Runs in a background thread — calls HA API then updates GUI."""
         from focus_mode_app.core.ha_client import HAClient
-
+        from focus_mode_app.core.ha_config import save_ha_config
         try:
             client = HAClient(ha_url=ha_url, llat=llat)
             webhook_id = client.register_device()
             save_ha_config(llat=llat, ha_url=ha_url, webhook_id=webhook_id)
-            self.after(0, self._on_register_success, webhook_id)
+            self._win.after(0, self._on_ok, webhook_id)
         except Exception as exc:
-            self.after(0, self._on_register_error, str(exc))
+            self._win.after(0, self._on_err, str(exc))
 
-    def _on_register_success(self, webhook_id: str):
-        self._webhook_id_var.set(webhook_id)
-        self._register_btn.config(state="normal", text="Registra dispositivo")
-        self._show_feedback(f"Registrato! Copia il Webhook ID nel plugin HACS.", 4000)
+    def _on_ok(self, webhook_id: str):
+        self._wh_var.set(webhook_id)
+        self._reg_btn.config(state="normal", text="Registra")
+        self._msg("Registrato! Copia il Webhook ID nel plugin HACS.")
 
-    def _on_register_error(self, error: str):
-        self._register_btn.config(state="normal", text="Registra dispositivo")
-        self._show_feedback(f"Errore: {error}")
+    def _on_err(self, error: str):
+        self._reg_btn.config(state="normal", text="Registra")
+        self._msg(f"Errore: {error}", error=True)
 
     # ------------------------------------------------------------------
     # Helpers
     # ------------------------------------------------------------------
 
-    def _copy_webhook_id(self):
-        wid = self._webhook_id_var.get()
+    def _toggle_llat(self):
+        showing = self._llat_entry.cget("show") == ""
+        self._llat_entry.config(show="*" if showing else "")
+        self._show_btn.config(text="Mostra" if showing else "Nascondi")
+
+    def _copy_wh(self):
+        wid = self._wh_var.get()
         if not wid:
             return
-        self.clipboard_clear()
-        self.clipboard_append(wid)
-        self._copy_btn.config(text="Copiato!")
-        self.after(1500, lambda: self._copy_btn.config(text="Copia"))
+        self._win.clipboard_clear()
+        self._win.clipboard_append(wid)
+        self._msg("Webhook ID copiato negli appunti.")
 
-    def _toggle_llat_visibility(self):
-        self._llat_visible = not self._llat_visible
-        self._llat_entry.config(show="" if self._llat_visible else "*")
-        self._llat_toggle_btn.config(
-            text="Nascondi" if self._llat_visible else "Mostra"
-        )
-
-    def _show_feedback(self, message: str, duration_ms: int = 2500):
-        self._feedback_label.config(text=message)
-        self.after(duration_ms, lambda: self._feedback_label.config(text=""))
+    def _msg(self, text: str, error: bool = False):
+        self._feedback_var.set(text)
+        self._feedback_lbl.config(fg="#D32F2F" if error else "#388E3C")
+        self._win.after(3000, lambda: self._feedback_var.set(""))
