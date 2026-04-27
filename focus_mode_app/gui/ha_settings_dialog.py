@@ -11,9 +11,12 @@ Campi:
   - Webhook ID (read-only, generato dopo "Registra")
 """
 
+import logging
 import threading
 import tkinter as tk
 from tkinter import ttk
+
+_LOGGER = logging.getLogger(__name__)
 
 
 class HASettingsPanel:
@@ -45,7 +48,7 @@ class HASettingsPanel:
         )
         self._url_var = tk.StringVar()
         ttk.Entry(f, textvariable=self._url_var, width=42).grid(
-            row=1, column=0, columnspan=2, sticky="ew", pady=(0, 8)
+            row=1, column=0, columnspan=2, sticky="ew", pady=(0, 2)
         )
         ttk.Label(f, text="es: https://homeassistant.local:8123", foreground="gray").grid(
             row=2, column=0, columnspan=2, sticky="w", pady=(0, 10)
@@ -72,7 +75,7 @@ class HASettingsPanel:
             row=6, column=0, sticky="w", pady=(0, 2)
         )
         wh_frame = ttk.Frame(f)
-        wh_frame.grid(row=7, column=0, columnspan=2, sticky="ew", pady=(0, 4))
+        wh_frame.grid(row=7, column=0, columnspan=2, sticky="ew", pady=(0, 2))
         self._wh_var = tk.StringVar()
         ttk.Entry(wh_frame, textvariable=self._wh_var, state="readonly", foreground="blue").pack(
             side="left", fill="x", expand=True
@@ -82,20 +85,25 @@ class HASettingsPanel:
         )
         ttk.Label(
             f, text="Incolla nel config flow del plugin HACS su Home Assistant.", foreground="gray"
-        ).grid(row=8, column=0, columnspan=2, sticky="w", pady=(0, 12))
+        ).grid(row=8, column=0, columnspan=2, sticky="w", pady=(0, 14))
 
-        # ── Pulsanti ─────────────────────────────────────────────────
-        btn_frame = ttk.Frame(f)
-        btn_frame.grid(row=9, column=0, columnspan=2, sticky="ew")
+        # ── Salva (riga dedicata, piena larghezza) ────────────────────
+        ttk.Button(
+            f,
+            text="Salva configurazione",
+            command=self._save,
+        ).grid(row=9, column=0, columnspan=2, sticky="ew", pady=(0, 6))
 
-        ttk.Button(btn_frame, text="Salva", command=self._save).pack(side="left", padx=(0, 6))
-        self._reg_btn = ttk.Button(btn_frame, text="Registra dispositivo", command=self._register)
-        self._reg_btn.pack(side="left")
+        # ── Registra dispositivo ──────────────────────────────────────
+        self._reg_btn = ttk.Button(
+            f, text="Registra dispositivo", command=self._register
+        )
+        self._reg_btn.grid(row=10, column=0, columnspan=2, sticky="ew", pady=(0, 8))
 
         # ── Feedback ─────────────────────────────────────────────────
         self._feedback_var = tk.StringVar()
         self._feedback_lbl = ttk.Label(f, textvariable=self._feedback_var, foreground="#388E3C")
-        self._feedback_lbl.grid(row=10, column=0, columnspan=2, sticky="w", pady=(8, 0))
+        self._feedback_lbl.grid(row=11, column=0, columnspan=2, sticky="w", pady=(0, 2))
 
         f.columnconfigure(0, weight=1)
 
@@ -109,18 +117,27 @@ class HASettingsPanel:
         self._url_var.set(cfg.get("ha_url", ""))
         self._llat_var.set(cfg.get("llat", ""))
         self._wh_var.set(cfg.get("webhook_id", ""))
+        _LOGGER.debug(
+            "Panel loaded: ha_url=%s webhook_id=%s",
+            cfg.get("ha_url") or "(empty)",
+            cfg.get("webhook_id") or "(empty)",
+        )
 
     def _save(self):
         from focus_mode_app.core.ha_config import save_ha_config
         ha_url = self._url_var.get().strip()
         llat = self._llat_var.get().strip()
+        _LOGGER.info("Save requested: ha_url=%s llat=%s", ha_url or "(empty)", "***" if llat else "(empty)")
         if not ha_url or not llat:
             self._msg("Inserisci URL e Token prima di salvare.", error=True)
+            _LOGGER.warning("Save aborted: missing ha_url or llat")
             return
         if save_ha_config(llat=llat, ha_url=ha_url):
             self._msg("Configurazione salvata.")
+            _LOGGER.info("Settings saved OK")
         else:
             self._msg("Errore durante il salvataggio.", error=True)
+            _LOGGER.error("Settings save FAILED")
 
     # ------------------------------------------------------------------
     # Registration
@@ -129,8 +146,10 @@ class HASettingsPanel:
     def _register(self):
         ha_url = self._url_var.get().strip()
         llat = self._llat_var.get().strip()
+        _LOGGER.info("Registration requested: ha_url=%s", ha_url or "(empty)")
         if not ha_url or not llat:
             self._msg("Inserisci URL e Token prima di registrare.", error=True)
+            _LOGGER.warning("Registration aborted: missing ha_url or llat")
             return
         self._reg_btn.config(state="disabled", text="Registrazione…")
         self._msg("Connessione a Home Assistant…")
@@ -140,11 +159,14 @@ class HASettingsPanel:
         from focus_mode_app.core.ha_client import HAClient
         from focus_mode_app.core.ha_config import save_ha_config
         try:
+            _LOGGER.info("Connecting to HA at %s for device registration…", ha_url)
             client = HAClient(ha_url=ha_url, llat=llat)
             webhook_id = client.register_device()
             save_ha_config(llat=llat, ha_url=ha_url, webhook_id=webhook_id)
+            _LOGGER.info("Registration successful, webhook_id=%s", webhook_id)
             self._frame.after(0, self._on_ok, webhook_id)
         except Exception as exc:
+            _LOGGER.error("Registration failed: %s", exc)
             self._frame.after(0, self._on_err, str(exc))
 
     def _on_ok(self, webhook_id: str):
@@ -172,6 +194,7 @@ class HASettingsPanel:
         self._frame.clipboard_clear()
         self._frame.clipboard_append(wid)
         self._msg("Webhook ID copiato negli appunti.")
+        _LOGGER.debug("Webhook ID copied to clipboard: %s", wid)
 
     def _msg(self, text: str, error: bool = False):
         self._feedback_var.set(text)

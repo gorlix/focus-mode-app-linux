@@ -83,15 +83,17 @@ class HAClient:
             "os_version": platform.release(),
             "supports_encryption": False,
         }
+        _LOGGER.info("POST %s  device=%s app=%s", url, payload["device_name"], payload["app_id"])
         resp = requests.post(
             url,
             json=payload,
             headers={"Authorization": f"Bearer {self.llat}"},
             timeout=10,
         )
+        _LOGGER.debug("Registration response: HTTP %s", resp.status_code)
         resp.raise_for_status()
         self.webhook_id = resp.json()["webhook_id"]
-        _LOGGER.info("Device registered, webhook_id=%s", self.webhook_id)
+        _LOGGER.info("Device registered OK  webhook_id=%s", self.webhook_id)
         return self.webhook_id
 
     def register_sensors(self) -> None:
@@ -99,6 +101,7 @@ class HAClient:
         if not self.webhook_id:
             raise RuntimeError("No webhook_id — call register_device() first")
         url = f"{self.ha_url}/api/webhook/{self.webhook_id}"
+        _LOGGER.info("Registering %d sensors via webhook…", len(_SENSOR_DEFS))
         for sensor in _SENSOR_DEFS:
             try:
                 r = requests.post(
@@ -107,8 +110,10 @@ class HAClient:
                     timeout=10,
                 )
                 r.raise_for_status()
+                _LOGGER.debug("  sensor OK: %s (%s)", sensor["unique_id"], sensor["type"])
             except requests.RequestException as exc:
-                _LOGGER.warning("Sensor registration failed (%s): %s", sensor["unique_id"], exc)
+                _LOGGER.warning("  sensor FAILED (%s): %s", sensor["unique_id"], exc)
+        _LOGGER.info("Sensor registration complete")
 
     # ------------------------------------------------------------------
     # State push
@@ -135,6 +140,13 @@ class HAClient:
         payload = {"type": "update_sensor_states", "data": sensors}
         url = f"{self.ha_url}/api/webhook/{self.webhook_id}"
 
+        active = state.get("active", False)
+        locked = state.get("focus_lock", {}).get("locked", False)
+        blocked_n = len(state.get("blocked_items", []))
+        _LOGGER.debug(
+            "State push → active=%s locked=%s blocked=%d restore=%s",
+            active, locked, blocked_n, state.get("restore_enabled"),
+        )
         threading.Thread(
             target=self._post_silent,
             args=(url, payload),
@@ -146,18 +158,21 @@ class HAClient:
         if not self.webhook_id:
             return
         url = f"{self.ha_url}/api/webhook/{self.webhook_id}"
+        _LOGGER.info("Sending dying gasp to HA…")
         try:
             requests.post(
                 url,
                 json={"event": "dying_gasp", "status": "offline"},
                 timeout=3,
             )
+            _LOGGER.info("Dying gasp sent OK")
         except requests.RequestException as exc:
             _LOGGER.warning("Dying gasp failed: %s", exc)
 
     def _post_silent(self, url: str, payload: dict) -> None:
         try:
-            requests.post(url, json=payload, timeout=5)
+            r = requests.post(url, json=payload, timeout=5)
+            _LOGGER.debug("State push HTTP %s", r.status_code)
         except requests.RequestException as exc:
             _LOGGER.warning("State push failed: %s", exc)
 
@@ -210,19 +225,23 @@ class HAClient:
             .replace("http://", "ws://")
         ) + "/api/websocket"
 
+        _LOGGER.info("WS connecting → %s", ws_url)
         ws = websocket.WebSocket()
         ws.connect(ws_url, timeout=10)
+        _LOGGER.debug("WS connected")
 
         msg = json.loads(ws.recv())
         if msg.get("type") != "auth_required":
             ws.close()
             raise RuntimeError(f"Expected auth_required, got {msg.get('type')}")
+        _LOGGER.debug("WS auth_required received")
 
         ws.send(json.dumps({"type": "auth", "access_token": self.llat}))
         msg = json.loads(ws.recv())
         if msg.get("type") != "auth_ok":
             ws.close()
             raise RuntimeError("HA authentication failed — check LLAT")
+        _LOGGER.info("WS authenticated (auth_ok)")
 
         ws.send(json.dumps({
             "type": "subscribe_events",
@@ -234,7 +253,7 @@ class HAClient:
             ws.close()
             raise RuntimeError(f"Event subscription failed: {msg}")
 
-        _LOGGER.info("Subscribed to linux_focus_mode_command events")
+        _LOGGER.info("WS subscribed to linux_focus_mode_command events — listening…")
 
         while not self._stop_event.is_set():
             ws.settimeout(5)
@@ -243,12 +262,15 @@ class HAClient:
             except websocket.WebSocketTimeoutException:
                 continue
             if not raw:
+                _LOGGER.warning("WS empty frame received — connection may have dropped")
                 break
             message = json.loads(raw)
             if message.get("type") == "event":
                 data = message.get("event", {}).get("data", {})
+                _LOGGER.info("WS command received: action=%s data=%s", data.get("action"), data)
                 self._dispatch(data)
 
+        _LOGGER.info("WS session ended")
         ws.close()
 
     def _dispatch(self, data: dict) -> None:

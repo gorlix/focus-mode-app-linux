@@ -5,6 +5,7 @@ Gestisce inizializzazione, caricamento risorse e avvio thread principali.
 Integra session restore per il ripristino app automatico.
 """
 
+import logging
 import sys
 import threading
 import signal
@@ -21,6 +22,33 @@ from focus_mode_app.api.launcher import start_api, stop_api
 _blocking_thread = None
 _tray_thread = None
 _app_instance = None
+
+
+def _setup_logging() -> None:
+    """Configure shell logging for HA client and config modules."""
+    fmt = logging.Formatter(
+        "%(asctime)s [%(levelname)-8s] %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
+    )
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(fmt)
+
+    # Root stays quiet (suppresses noisy third-party libs)
+    root = logging.getLogger()
+    root.setLevel(logging.WARNING)
+    root.addHandler(handler)
+
+    # Our HA modules print everything
+    for name in (
+        "focus_mode_app.core.ha_client",
+        "focus_mode_app.core.ha_config",
+        "focus_mode_app.gui.ha_settings_dialog",
+        "focus_mode_app.api.launcher",
+        "focus_mode_app.api.notifier",
+    ):
+        lg = logging.getLogger(name)
+        lg.setLevel(logging.DEBUG)
+        lg.propagate = True
 
 
 def cleanup_handlers():
@@ -50,6 +78,7 @@ def main():
     Funzione principale che avvia l'applicazione Focus Mode App.
     Inizializza configurazione, carica dati persistenti, avvia GUI e thread worker.
     """
+    _setup_logging()
     print("[INFO] Avvio Focus Mode App...")
 
     global _blocking_thread, _tray_thread, _app_instance

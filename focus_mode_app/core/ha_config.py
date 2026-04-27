@@ -9,10 +9,13 @@ Gestisce il salvataggio e il caricamento di:
 """
 
 import json
+import logging
 import os
 from pathlib import Path
 
 from focus_mode_app.config import DATA_DIR
+
+_LOGGER = logging.getLogger(__name__)
 
 HA_CONFIG_FILE: Path = DATA_DIR / "ha_config.json"
 
@@ -35,15 +38,23 @@ def load_ha_config() -> dict:
         In caso di file mancante o corrotto ritorna i valori di default.
     """
     if not HA_CONFIG_FILE.exists():
+        _LOGGER.debug("Config file not found, using defaults")
         return dict(_DEFAULTS)
 
     try:
         with open(HA_CONFIG_FILE, "r", encoding="utf-8") as f:
             data = json.load(f)
+        cfg = {**_DEFAULTS, **data}
+        _LOGGER.debug(
+            "Config loaded: ha_url=%s webhook_id=%s llat=%s",
+            cfg.get("ha_url") or "(empty)",
+            cfg.get("webhook_id") or "(empty)",
+            "***" if cfg.get("llat") else "(empty)",
+        )
+        return cfg
 
-        return {**_DEFAULTS, **data}
-
-    except (json.JSONDecodeError, OSError):
+    except (json.JSONDecodeError, OSError) as exc:
+        _LOGGER.warning("Config load failed (%s), using defaults", exc)
         return dict(_DEFAULTS)
 
 
@@ -70,7 +81,6 @@ def save_ha_config(
     try:
         DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-        # Merge with existing config to preserve fields not passed here
         existing = load_ha_config()
         payload = {
             **existing,
@@ -89,10 +99,17 @@ def save_ha_config(
         except OSError:
             pass
 
+        _LOGGER.info(
+            "Config saved → %s  ha_url=%s  webhook_id=%s  llat=%s",
+            HA_CONFIG_FILE,
+            payload["ha_url"] or "(empty)",
+            payload["webhook_id"] or "(empty)",
+            "***" if payload["llat"] else "(empty)",
+        )
         return True
 
-    except Exception as e:
-        print(f"[ERROR] ha_config: impossibile salvare: {e}")
+    except Exception as exc:
+        _LOGGER.error("Save failed: %s", exc)
         return False
 
 
