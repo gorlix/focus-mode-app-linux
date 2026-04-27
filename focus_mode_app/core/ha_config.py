@@ -17,9 +17,12 @@ from focus_mode_app.config import DATA_DIR
 HA_CONFIG_FILE: Path = DATA_DIR / "ha_config.json"
 
 _DEFAULTS: dict = {
+    "ha_url": "",
+    "llat": "",
+    "webhook_id": "",
+    # Legacy fields kept for backward compat with existing ha_config.json
     "dying_gasp_url": "",
     "state_event_url": "",
-    "llat": "",
 }
 
 
@@ -44,14 +47,22 @@ def load_ha_config() -> dict:
         return dict(_DEFAULTS)
 
 
-def save_ha_config(dying_gasp_url: str, state_event_url: str, llat: str) -> bool:
+def save_ha_config(
+    llat: str,
+    ha_url: str = "",
+    webhook_id: str = "",
+    dying_gasp_url: str = "",
+    state_event_url: str = "",
+) -> bool:
     """
     Salva la configurazione HA su disco con permessi ristretti (0o600).
 
     Args:
-        dying_gasp_url: URL webhook HA notifica spegnimento app.
-        state_event_url: URL webhook HA per push cambio stato real-time.
         llat: Home Assistant Long-Lived Access Token.
+        ha_url: URL base di Home Assistant (es. https://homeassistant.local:8123).
+        webhook_id: Webhook ID ricevuto dopo la registrazione del dispositivo.
+        dying_gasp_url: (legacy) URL webhook dying gasp.
+        state_event_url: (legacy) URL webhook eventi di stato.
 
     Returns:
         True se il salvataggio è riuscito, False altrimenti.
@@ -59,10 +70,15 @@ def save_ha_config(dying_gasp_url: str, state_event_url: str, llat: str) -> bool
     try:
         DATA_DIR.mkdir(parents=True, exist_ok=True)
 
+        # Merge with existing config to preserve fields not passed here
+        existing = load_ha_config()
         payload = {
-            "dying_gasp_url": dying_gasp_url,
-            "state_event_url": state_event_url,
+            **existing,
+            "ha_url": ha_url or existing.get("ha_url", ""),
             "llat": llat,
+            "webhook_id": webhook_id or existing.get("webhook_id", ""),
+            "dying_gasp_url": dying_gasp_url or existing.get("dying_gasp_url", ""),
+            "state_event_url": state_event_url or existing.get("state_event_url", ""),
         }
 
         with open(HA_CONFIG_FILE, "w", encoding="utf-8") as f:
@@ -80,14 +96,40 @@ def save_ha_config(dying_gasp_url: str, state_event_url: str, llat: str) -> bool
         return False
 
 
+def get_ha_url() -> str:
+    """URL base di Home Assistant. Stringa vuota se non configurato."""
+    return load_ha_config().get("ha_url", "")
+
+
+def get_webhook_id() -> str:
+    """Webhook ID ricevuto dopo la registrazione. Stringa vuota se non registrato."""
+    return load_ha_config().get("webhook_id", "")
+
+
+def save_webhook_id(webhook_id: str) -> bool:
+    """Salva solo il webhook_id (dopo registrazione)."""
+    existing = load_ha_config()
+    return save_ha_config(
+        llat=existing.get("llat", ""),
+        ha_url=existing.get("ha_url", ""),
+        webhook_id=webhook_id,
+    )
+
+
 def get_dying_gasp_url() -> str:
-    """URL webhook HA per il dying gasp (notifica spegnimento). Stringa vuota se non configurato."""
-    return load_ha_config().get("dying_gasp_url", "")
+    """URL webhook dying gasp (legacy). Stringa vuota se non configurato."""
+    cfg = load_ha_config()
+    if cfg.get("ha_url") and cfg.get("webhook_id"):
+        return f"{cfg['ha_url'].rstrip('/')}/api/webhook/{cfg['webhook_id']}"
+    return cfg.get("dying_gasp_url", "")
 
 
 def get_state_event_url() -> str:
-    """URL webhook HA per push eventi di stato. Stringa vuota se non configurato."""
-    return load_ha_config().get("state_event_url", "")
+    """URL webhook eventi di stato (legacy). Stringa vuota se non configurato."""
+    cfg = load_ha_config()
+    if cfg.get("ha_url") and cfg.get("webhook_id"):
+        return f"{cfg['ha_url'].rstrip('/')}/api/webhook/{cfg['webhook_id']}"
+    return cfg.get("state_event_url", "")
 
 
 def get_llat() -> str:
@@ -99,6 +141,9 @@ __all__ = [
     "HA_CONFIG_FILE",
     "load_ha_config",
     "save_ha_config",
+    "save_webhook_id",
+    "get_ha_url",
+    "get_webhook_id",
     "get_dying_gasp_url",
     "get_state_event_url",
     "get_llat",
