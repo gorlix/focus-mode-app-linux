@@ -83,6 +83,15 @@ def main():
 
     global _blocking_thread, _tray_thread, _app_instance
 
+    # QApplication must be created in the main thread before any Qt widget
+    # (including the tray icon thread). We do it here so TrayThread reuses it.
+    try:
+        from PyQt6.QtWidgets import QApplication
+        if QApplication.instance() is None:
+            _qt_app_global = QApplication(sys.argv)  # noqa: F841
+    except ImportError:
+        pass
+
     load_config()
 
     load_blocked_items()

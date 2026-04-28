@@ -6,6 +6,7 @@ On start: launches uvicorn + initialises HAClient + starts WS listener.
 On stop:  sends dying gasp + stops WS listener + gracefully shuts uvicorn.
 """
 
+import socket
 import threading
 from typing import Optional
 
@@ -21,16 +22,33 @@ _api_server: Optional[uvicorn.Server] = None
 _api_thread: Optional[threading.Thread] = None
 
 
+def _find_free_port(start: int, attempts: int = 5) -> int:
+    """Return the first TCP port in [start, start+attempts) that nothing is listening on."""
+    for port in range(start, start + attempts):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            s.settimeout(0.1)
+            if s.connect_ex(("127.0.0.1", port)) != 0:
+                return port  # connection refused → port is free
+    raise RuntimeError(
+        f"No free port found between {start} and {start + attempts - 1}"
+    )
+
+
 def _run_uvicorn() -> None:
     global _api_server
+    port = _find_free_port(API_PORT)
+    if port != API_PORT:
+        api_logger.warning(
+            "Port %d in use — using %d instead", API_PORT, port
+        )
     config = uvicorn.Config(
         app=app,
         host=API_HOST,
-        port=API_PORT,
+        port=port,
         log_level="warning",
     )
     _api_server = uvicorn.Server(config=config)
-    api_logger.info("Starting Uvicorn server on %s:%s", API_HOST, API_PORT)
+    api_logger.info("Starting Uvicorn server on %s:%s", API_HOST, port)
     _api_server.run()
 
 

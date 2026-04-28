@@ -473,15 +473,19 @@ class AppGui(ttk.Window):
         self._ha_panel_visible = False
 
     def _toggle_ha_panel(self):
-        """Mostra/nasconde il pannello HA inline."""
+        """Mostra/nasconde il pannello HA inline ridimensionando la finestra."""
         if self._ha_panel_visible:
             self._ha_panel.frame.pack_forget()
             self._ha_panel_visible = False
             self._btn_ha.config(text="Impostazioni HA ▼")
+            self.geometry(f"{WINDOW_WIDTH}x{WINDOW_HEIGHT}")
         else:
             self._ha_panel.frame.pack(fill="x", pady=(8, 0))
             self._ha_panel_visible = True
             self._btn_ha.config(text="Impostazioni HA ▲")
+            self.update_idletasks()
+            new_h = self.winfo_reqheight()
+            self.geometry(f"{WINDOW_WIDTH}x{new_h}")
 
     # ========================================================================
     # GESTIONE BLOCCO
