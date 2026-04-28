@@ -1,9 +1,19 @@
 #!/bin/bash
 # AppRun — entry point for the Focus Mode App AppImage.
-# Sets up Qt platform detection before launching the PyInstaller bundle.
 
 SELF="$(readlink -f "$0")"
 HERE="${SELF%/*}"
+
+# Point Tcl/Tk to the bundled libraries so ttkbootstrap's msgcat package loads
+# correctly.  PyInstaller 6.x puts these inside _internal/; fall back to $HERE
+# for older one-dir layouts.
+if [ -d "$HERE/_internal/tcl8.6" ]; then
+    export TCL_LIBRARY="$HERE/_internal/tcl8.6"
+    export TK_LIBRARY="$HERE/_internal/tk8.6"
+elif [ -d "$HERE/tcl8.6" ]; then
+    export TCL_LIBRARY="$HERE/tcl8.6"
+    export TK_LIBRARY="$HERE/tk8.6"
+fi
 
 # Prefer native Wayland for the Qt tray icon; Tkinter uses XWayland internally.
 if [ -z "$QT_QPA_PLATFORM" ]; then
