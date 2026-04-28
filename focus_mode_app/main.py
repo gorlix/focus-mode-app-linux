@@ -16,12 +16,15 @@ from focus_mode_app.core.storage import load_blocked_items
 from focus_mode_app.core.blocker import start_blocking_loop, set_blocking_active
 from focus_mode_app.core.session import session_tracker
 from focus_mode_app.gui.main_window import AppGui
-from focus_mode_app.utils.tray_icon import create_and_run_tray_icon, stop_tray_icon
+from focus_mode_app.utils.tray_icon import (
+    setup_tray_icon,
+    run_qt_with_tkinter,
+    stop_tray_icon,
+)
 from focus_mode_app.api.launcher import start_api, stop_api
 
 
 _blocking_thread: Optional[threading.Thread] = None
-_tray_thread: Optional[threading.Thread] = None
 _app_instance: Optional[AppGui] = None
 
 
@@ -75,24 +78,14 @@ def signal_handler(signum: int, frame: Optional[object]) -> None:
 def main() -> None:
     """Initialize and run the Focus Mode App.
 
-    Loads the configuration and persistent data, explicitly spawns the
-    background blocking thread and the system tray thread, and starts
-    the main GUI event loop.
+    Loads the configuration and persistent data, spawns the background
+    blocking thread, sets up the system tray on the main thread, then
+    runs the Qt event loop (which drives Tkinter via a QTimer).
     """
     _setup_logging()
     print("[INFO] Starting Focus Mode App...")
 
-    global _blocking_thread, _tray_thread, _app_instance
-
-    # QApplication must be created in the main thread before any Qt widget
-    # (including the tray icon thread). We do it here so TrayThread reuses it.
-    try:
-        from PyQt6.QtWidgets import QApplication
-
-        if QApplication.instance() is None:
-            _qt_app_global = QApplication(sys.argv)  # noqa: F841
-    except ImportError:
-        pass
+    global _blocking_thread, _app_instance
 
     load_config()
     load_blocked_items()
@@ -114,32 +107,27 @@ def main() -> None:
     print("[INFO] Blocking thread started")
 
     # ========================================================================
-    # START TRAY ICON THREAD
-    # ========================================================================
-
-    _tray_thread = threading.Thread(
-        target=create_and_run_tray_icon,
-        args=(_app_instance,),
-        daemon=True,
-        name="TrayThread",
-    )
-    _tray_thread.start()
-    print("[INFO] System tray thread started")
-
-    # ========================================================================
-    # GUI MAINLOOP
+    # START API + TRAY ICON (main thread)
     # ========================================================================
 
     start_api()
 
+    # Qt must run on the main thread. setup_tray_icon() creates the icon;
+    # run_qt_with_tkinter() starts exec() and drives Tkinter via QTimer.
+    setup_tray_icon(_app_instance)
+
+    # ========================================================================
+    # MAIN LOOP (Qt event loop — replaces tk.mainloop())
+    # ========================================================================
+
     try:
-        _app_instance.mainloop()
+        run_qt_with_tkinter(_app_instance)
 
     except KeyboardInterrupt:
         print("\n[INFO] Keyboard Interrupt received")
 
     except Exception as e:
-        print(f"[ERROR] Mainloop error: {e}")
+        print(f"[ERROR] Main loop error: {e}")
 
     finally:
         print("[INFO] Closing application...")
