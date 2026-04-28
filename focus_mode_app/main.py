@@ -12,6 +12,30 @@ import signal
 from typing import Optional
 
 from focus_mode_app.config import load_config
+
+# Ensure ttkbootstrap's msgcat localization never crashes the app.
+# In PyInstaller/AppImage bundles on non-Ubuntu distros, TCL_LIBRARY may not
+# be initialised before _tkinter loads, so ::msgcat::mcmset doesn't exist.
+# We patch initialize_localities to call "package require msgcat" first and
+# suppress any residual TclError so the app always starts.
+try:
+    from ttkbootstrap.localization import msgs as _ttkb_msgs
+
+    _orig_init_loc = _ttkb_msgs.initialize_localities
+
+    def _safe_init_loc(master):  # type: ignore[override]
+        try:
+            master.tk.call("package", "require", "msgcat")
+        except Exception:
+            pass
+        try:
+            _orig_init_loc(master)
+        except Exception:
+            pass
+
+    _ttkb_msgs.initialize_localities = _safe_init_loc
+except Exception:
+    pass
 from focus_mode_app.core.storage import load_blocked_items
 from focus_mode_app.core.blocker import start_blocking_loop, set_blocking_active
 from focus_mode_app.core.session import session_tracker

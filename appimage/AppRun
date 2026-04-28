@@ -4,10 +4,13 @@
 SELF="$(readlink -f "$0")"
 HERE="${SELF%/*}"
 
-# Point Tcl/Tk to the bundled libraries so ttkbootstrap's msgcat package loads
-# correctly.  PyInstaller 6.x puts these inside _internal/; fall back to $HERE
-# for older one-dir layouts.
-if [ -d "$HERE/_internal/tcl8.6" ]; then
+# Point Tcl/Tk to the bundled libraries so ttkbootstrap's msgcat loads.
+# PyInstaller 6.x bundles Tcl/Tk scripts in _tcl_data/_tk_data (newer) or
+# tcl8.6/tk8.6 (older layouts) — check all known locations.
+if [ -d "$HERE/_internal/_tcl_data" ]; then
+    export TCL_LIBRARY="$HERE/_internal/_tcl_data"
+    export TK_LIBRARY="$HERE/_internal/_tk_data"
+elif [ -d "$HERE/_internal/tcl8.6" ]; then
     export TCL_LIBRARY="$HERE/_internal/tcl8.6"
     export TK_LIBRARY="$HERE/_internal/tk8.6"
 elif [ -d "$HERE/tcl8.6" ]; then

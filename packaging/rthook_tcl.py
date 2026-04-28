@@ -17,14 +17,14 @@ if getattr(sys, "frozen", False):
     meipass = getattr(sys, "_MEIPASS", "")
     if meipass:
         if "TCL_LIBRARY" not in os.environ:
-            for name in ("tcl8.6", "tcl9.0", "_tcl_data"):
+            for name in ("_tcl_data", "tcl8.6", "tcl9.0"):
                 path = os.path.join(meipass, name)
                 if os.path.isdir(path):
                     os.environ["TCL_LIBRARY"] = path
                     break
 
         if "TK_LIBRARY" not in os.environ:
-            for name in ("tk8.6", "tk9.0", "_tk_data"):
+            for name in ("_tk_data", "tk8.6", "tk9.0"):
                 path = os.path.join(meipass, name)
                 if os.path.isdir(path):
                     os.environ["TK_LIBRARY"] = path
