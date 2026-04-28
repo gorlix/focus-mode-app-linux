@@ -16,18 +16,19 @@ Integration test (no live HA needed):
 """
 
 import json
-import queue
 import socket
 import threading
 import time
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 import pytest
 
 # ── fixtures / helpers ─────────────────────────────────────────────────────────
 
+
 @pytest.fixture(autouse=True)
 def clear_action_queue():
     from focus_mode_app.api.signals import api_action_queue
+
     while not api_action_queue.empty():
         try:
             api_action_queue.get_nowait()
@@ -44,10 +45,14 @@ def clear_action_queue():
 @pytest.fixture()
 def client():
     from focus_mode_app.core.ha_client import HAClient
-    return HAClient(ha_url="http://ha.local:8123", llat="test_llat_token", webhook_id="wh_test_123")
+
+    return HAClient(
+        ha_url="http://ha.local:8123", llat="test_llat_token", webhook_id="wh_test_123"
+    )
 
 
 # ── registration ───────────────────────────────────────────────────────────────
+
 
 def test_register_device_sends_correct_payload(tmp_path):
     """register_device() POSTs to mobile_app/registrations and stores webhook_id."""
@@ -57,8 +62,9 @@ def test_register_device_sends_correct_payload(tmp_path):
     mock_resp.json.return_value = {"webhook_id": "generated_wh_id"}
     mock_resp.raise_for_status = MagicMock()
 
-    with patch("focus_mode_app.core.ha_client.DATA_DIR", tmp_path), \
-         patch("requests.post", return_value=mock_resp) as mock_post:
+    with patch("focus_mode_app.core.ha_client.DATA_DIR", tmp_path), patch(
+        "requests.post", return_value=mock_resp
+    ) as mock_post:
         c = HAClient(ha_url="http://ha.local:8123", llat="mytoken")
         wid = c.register_device()
 
@@ -94,12 +100,14 @@ def test_register_sensors_posts_each_sensor(client):
 
 def test_register_sensors_raises_without_webhook_id():
     from focus_mode_app.core.ha_client import HAClient
+
     c = HAClient(ha_url="http://ha.local", llat="tok")
     with pytest.raises(RuntimeError, match="webhook_id"):
         c.register_sensors()
 
 
 # ── state push ─────────────────────────────────────────────────────────────────
+
 
 def test_push_state_sends_update_sensor_states(client):
     """push_state() fires a POST with type=update_sensor_states and correct values."""
@@ -129,7 +137,7 @@ def test_push_state_sends_update_sensor_states(client):
     assert sensors["restore_enabled"] is False
     assert sensors["blocked_count"] == 2
     assert sensors["focus_locked"] is True
-    assert sensors["ha_lock_active"] is False   # has remaining_time → not HA lock
+    assert sensors["ha_lock_active"] is False  # has remaining_time → not HA lock
     assert sensors["lock_remaining"] == "10m 0s"
     assert sensors["app_online"] is True
 
@@ -143,7 +151,10 @@ def test_push_state_detects_ha_lock(client):
         "focus_lock": {"locked": True, "remaining_time": None, "target_time": None},
     }
     posted = []
-    with patch("requests.post", side_effect=lambda *a, **kw: posted.append(kw["json"]) or MagicMock()):
+    with patch(
+        "requests.post",
+        side_effect=lambda *a, **kw: posted.append(kw["json"]) or MagicMock(),
+    ):
         client.push_state(state)
         time.sleep(0.05)
 
@@ -155,6 +166,7 @@ def test_push_state_detects_ha_lock(client):
 def test_push_state_skipped_without_webhook_id():
     """push_state() is a no-op when webhook_id is empty."""
     from focus_mode_app.core.ha_client import HAClient
+
     c = HAClient(ha_url="http://ha.local", llat="tok")
     with patch("requests.post") as mock_post:
         c.push_state({"active": True, "focus_lock": {}})
@@ -163,6 +175,7 @@ def test_push_state_skipped_without_webhook_id():
 
 
 # ── dying gasp ─────────────────────────────────────────────────────────────────
+
 
 def test_send_dying_gasp(client):
     with patch("requests.post") as mock_post:
@@ -176,6 +189,7 @@ def test_send_dying_gasp(client):
 
 def test_send_dying_gasp_skipped_without_webhook_id():
     from focus_mode_app.core.ha_client import HAClient
+
     c = HAClient(ha_url="http://ha.local", llat="tok")
     with patch("requests.post") as mock_post:
         c.send_dying_gasp()
@@ -184,18 +198,31 @@ def test_send_dying_gasp_skipped_without_webhook_id():
 
 # ── command dispatch ───────────────────────────────────────────────────────────
 
-@pytest.mark.parametrize("action,extra,expected_queue", [
-    ("focus_on",    {},                                {"action": "toggle", "active": True}),
-    ("focus_off",   {},                                {"action": "toggle", "active": False}),
-    ("lock_timer",  {"minutes": 25},                   {"action": "lock", "mode": "timer", "minutes": 25}),
-    ("lock_target", {"hour": 14, "minute": 30},        {"action": "lock", "mode": "target", "hour": 14, "minute": 30}),
-    ("lock_ha",     {},                                {"action": "lock", "mode": "ha"}),
-    ("unlock",      {},                                {"action": "unlock"}),
-    ("restore_on",  {},                                {"action": "set_restore", "enabled": True}),
-    ("restore_off", {},                                {"action": "set_restore", "enabled": False}),
-])
+
+@pytest.mark.parametrize(
+    "action,extra,expected_queue",
+    [
+        ("focus_on", {}, {"action": "toggle", "active": True}),
+        ("focus_off", {}, {"action": "toggle", "active": False}),
+        (
+            "lock_timer",
+            {"minutes": 25},
+            {"action": "lock", "mode": "timer", "minutes": 25},
+        ),
+        (
+            "lock_target",
+            {"hour": 14, "minute": 30},
+            {"action": "lock", "mode": "target", "hour": 14, "minute": 30},
+        ),
+        ("lock_ha", {}, {"action": "lock", "mode": "ha"}),
+        ("unlock", {}, {"action": "unlock"}),
+        ("restore_on", {}, {"action": "set_restore", "enabled": True}),
+        ("restore_off", {}, {"action": "set_restore", "enabled": False}),
+    ],
+)
 def test_dispatch_all_actions(client, action, extra, expected_queue):
     from focus_mode_app.api.signals import api_action_queue
+
     client._dispatch({"action": action, **extra})
     assert api_action_queue.qsize() == 1
     assert api_action_queue.get_nowait() == expected_queue
@@ -203,15 +230,18 @@ def test_dispatch_all_actions(client, action, extra, expected_queue):
 
 def test_dispatch_unknown_action_ignored(client):
     from focus_mode_app.api.signals import api_action_queue
+
     client._dispatch({"action": "nonexistent_action"})
     assert api_action_queue.empty()
 
 
 # ── push_current_state() ───────────────────────────────────────────────────────
 
+
 def test_push_current_state_returns_false_when_no_client():
     """push_current_state() returns False when singleton not initialised."""
     import focus_mode_app.core.ha_client as _ha
+
     original = _ha._client
     _ha._client = None
     try:
@@ -223,6 +253,7 @@ def test_push_current_state_returns_false_when_no_client():
 def test_push_current_state_returns_false_when_no_webhook_id():
     import focus_mode_app.core.ha_client as _ha
     from focus_mode_app.core.ha_client import HAClient
+
     original = _ha._client
     _ha._client = HAClient(ha_url="http://ha.local", llat="tok")
     try:
@@ -245,10 +276,11 @@ def test_push_current_state_calls_push_state():
         "blocking_active": True,
         "focus_lock": {"locked": False, "remaining_time": None, "target_time": None},
     }
-    with patch("focus_mode_app.core.ha_client.DATA_DIR"), \
-         patch("focus_mode_app.core.blocker.get_blocking_stats", return_value=fake_stats), \
-         patch("focus_mode_app.core.blocker.is_restore_enabled", return_value=True), \
-         patch("focus_mode_app.core.ha_client.api_action_queue"):
+    with patch("focus_mode_app.core.ha_client.DATA_DIR"), patch(
+        "focus_mode_app.core.blocker.get_blocking_stats", return_value=fake_stats
+    ), patch(
+        "focus_mode_app.core.blocker.is_restore_enabled", return_value=True
+    ), patch("focus_mode_app.core.ha_client.api_action_queue"):
         try:
             result = _ha.push_current_state()
         finally:
@@ -263,6 +295,7 @@ def test_push_current_state_calls_push_state():
 
 # ── WebSocket session (mocked) ─────────────────────────────────────────────────
 
+
 def test_ws_session_auth_and_subscribe(client):
     """
     _ws_session() authenticates, subscribes to linux_focus_mode_command,
@@ -276,36 +309,45 @@ def test_ws_session_auth_and_subscribe(client):
         json.dumps({"type": "auth_ok"}),
         json.dumps({"type": "result", "id": 1, "success": True}),
         # Command event
-        json.dumps({
-            "type": "event",
-            "event": {"data": {"action": "focus_on"}},
-        }),
+        json.dumps(
+            {
+                "type": "event",
+                "event": {"data": {"action": "focus_on"}},
+            }
+        ),
     ]
     sent = []
 
     class MockWS:
         def __init__(self):
             self._msgs = iter(messages)
+
         def connect(self, url, timeout=None):
             pass
+
         def recv(self):
             return next(self._msgs)
+
         def send(self, data):
             sent.append(json.loads(data))
+
         def settimeout(self, t):
             pass
+
         def close(self):
             pass
 
     # Stop after one event so _ws_session exits cleanly
     call_count = [0]
     original_recv = MockWS.recv
+
     def recv_with_stop(self):
         val = original_recv(self)
         call_count[0] += 1
         if call_count[0] >= len(messages):
             client._stop_event.set()
         return val
+
     MockWS.recv = recv_with_stop
 
     mock_ws_module = MagicMock()
@@ -333,10 +375,17 @@ def test_ws_session_raises_on_auth_failure(client):
     it = iter(messages)
 
     class MockWS:
-        def connect(self, url, timeout=None): pass
-        def recv(self): return next(it)
-        def send(self, data): pass
-        def close(self): pass
+        def connect(self, url, timeout=None):
+            pass
+
+        def recv(self):
+            return next(it)
+
+        def send(self, data):
+            pass
+
+        def close(self):
+            pass
 
     mock_ws_module = MagicMock()
     mock_ws_module.WebSocket.return_value = MockWS()
@@ -348,6 +397,7 @@ def test_ws_session_raises_on_auth_failure(client):
 
 
 # ── Integration: mock HA HTTP server ──────────────────────────────────────────
+
 
 def test_integration_registration_and_state_push():
     """
@@ -377,12 +427,13 @@ def test_integration_registration_and_state_push():
     fa_client = FATestClient(mock_app)
 
     # Patch requests.post to route through our fake HA
-    import requests as _req
 
     def fake_requests_post(url, json=None, headers=None, timeout=None):
         path = url.replace("http://fake-ha.local:8123", "")
         if "/api/mobile_app/registrations" in path:
-            r = fa_client.post("/api/mobile_app/registrations", json=json, headers=headers or {})
+            r = fa_client.post(
+                "/api/mobile_app/registrations", json=json, headers=headers or {}
+            )
         else:
             # webhook path: /api/webhook/<id>
             wid = path.split("/api/webhook/")[-1]
@@ -392,9 +443,10 @@ def test_integration_registration_and_state_push():
         mock_r.raise_for_status = MagicMock()
         return mock_r
 
-    with patch("requests.post", side_effect=fake_requests_post), \
-         patch("focus_mode_app.core.ha_client.DATA_DIR", __import__("pathlib").Path("/tmp/ha_client_test")):
-
+    with patch("requests.post", side_effect=fake_requests_post), patch(
+        "focus_mode_app.core.ha_client.DATA_DIR",
+        __import__("pathlib").Path("/tmp/ha_client_test"),
+    ):
         __import__("pathlib").Path("/tmp/ha_client_test").mkdir(exist_ok=True)
 
         c = HAClient(ha_url="http://fake-ha.local:8123", llat="integration_llat")
@@ -411,7 +463,11 @@ def test_integration_registration_and_state_push():
             "active": True,
             "restore_enabled": True,
             "blocked_items": [{"name": "firefox"}],
-            "focus_lock": {"locked": False, "remaining_time": None, "target_time": None},
+            "focus_lock": {
+                "locked": False,
+                "remaining_time": None,
+                "target_time": None,
+            },
         }
         c.push_state(state)
         time.sleep(0.1)
@@ -421,11 +477,19 @@ def test_integration_registration_and_state_push():
     assert reg_event[1]["app_id"] == "linux_focus_mode"
 
     # Verify sensor registrations (7 sensors)
-    sensor_regs = [e for e in received if e[0] == "webhook" and e[2].get("type") == "register_sensor"]
+    sensor_regs = [
+        e
+        for e in received
+        if e[0] == "webhook" and e[2].get("type") == "register_sensor"
+    ]
     assert len(sensor_regs) == 7
 
     # Verify state push
-    state_pushes = [e for e in received if e[0] == "webhook" and e[2].get("type") == "update_sensor_states"]
+    state_pushes = [
+        e
+        for e in received
+        if e[0] == "webhook" and e[2].get("type") == "update_sensor_states"
+    ]
     assert len(state_pushes) == 1
     sensors = {s["unique_id"]: s["state"] for s in state_pushes[0][2]["data"]}
     assert sensors["focus_active"] is True
@@ -434,6 +498,7 @@ def test_integration_registration_and_state_push():
 
 
 # ── Integration: WebSocket command reception ───────────────────────────────────
+
 
 def test_integration_websocket_command_received():
     """
@@ -446,34 +511,39 @@ def test_integration_websocket_command_received():
     # Find a free port
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
-        port = s.getsockname()[1]
 
-    server_ready = threading.Event()
     client_connected = threading.Event()
 
     def run_mock_ha_ws():
         """Minimal WS server: auth_required → auth_ok → result → event."""
-        import websocket._http as _  # ensure websocket is importable
         from websocket._server import WebSocketSimpleServer
 
         class Handler(WebSocketSimpleServer):
             def handle(self):
-                self.send(json.dumps({"type": "auth_required", "ha_version": "2026.4.0"}))
+                self.send(
+                    json.dumps({"type": "auth_required", "ha_version": "2026.4.0"})
+                )
                 auth = json.loads(self.receive())
                 assert auth["type"] == "auth"
                 self.send(json.dumps({"type": "auth_ok"}))
                 sub = json.loads(self.receive())
                 assert sub["type"] == "subscribe_events"
-                self.send(json.dumps({"type": "result", "id": sub["id"], "success": True}))
+                self.send(
+                    json.dumps({"type": "result", "id": sub["id"], "success": True})
+                )
                 # Fire a command event
-                self.send(json.dumps({
-                    "type": "event",
-                    "id": sub["id"],
-                    "event": {
-                        "event_type": "linux_focus_mode_command",
-                        "data": {"action": "restore_on"},
-                    },
-                }))
+                self.send(
+                    json.dumps(
+                        {
+                            "type": "event",
+                            "id": sub["id"],
+                            "event": {
+                                "event_type": "linux_focus_mode_command",
+                                "data": {"action": "restore_on"},
+                            },
+                        }
+                    )
+                )
                 client_connected.set()
 
         # Simple TCP WS server — just enough for testing
@@ -487,25 +557,35 @@ def test_integration_websocket_command_received():
             json.dumps({"type": "auth_required"}),
             json.dumps({"type": "auth_ok"}),
             json.dumps({"type": "result", "id": 1, "success": True}),
-            json.dumps({
-                "type": "event",
-                "event": {"data": {"action": "restore_on"}},
-            }),
+            json.dumps(
+                {
+                    "type": "event",
+                    "event": {"data": {"action": "restore_on"}},
+                }
+            ),
         ]
         it = iter(seq)
         call_count = [0]
 
         class MockWS:
-            def connect(self, url, timeout=None): pass
+            def connect(self, url, timeout=None):
+                pass
+
             def recv(self):
                 val = next(it)
                 call_count[0] += 1
                 if call_count[0] >= len(seq):
                     command_event.set()
                 return val
-            def send(self, data): pass
-            def settimeout(self, t): pass
-            def close(self): pass
+
+            def send(self, data):
+                pass
+
+            def settimeout(self, t):
+                pass
+
+            def close(self):
+                pass
 
         return MockWS()
 

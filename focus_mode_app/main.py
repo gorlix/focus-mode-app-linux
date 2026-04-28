@@ -14,26 +14,13 @@ from typing import Optional
 from focus_mode_app.config import load_config
 
 # Ensure ttkbootstrap's msgcat localization never crashes the app.
-# In PyInstaller/AppImage bundles on non-Ubuntu distros, TCL_LIBRARY may not
-# be initialised before _tkinter loads, so ::msgcat::mcmset doesn't exist.
-# We patch initialize_localities to call "package require msgcat" first and
-# suppress any residual TclError so the app always starts.
+# In PyInstaller/AppImage bundles on Ubuntu, Tcl/Tk msgcat module directory structures
+# may cause TclError: invalid command name "::msgcat::mcmset".
+# We disable localization entirely to bypass the issue, as we do not rely on it.
 try:
-    from ttkbootstrap.localization import msgs as _ttkb_msgs
+    import ttkbootstrap.localization
 
-    _orig_init_loc = _ttkb_msgs.initialize_localities
-
-    def _safe_init_loc(master):  # type: ignore[override]
-        try:
-            master.tk.call("package", "require", "msgcat")
-        except Exception:
-            pass
-        try:
-            _orig_init_loc(master)
-        except Exception:
-            pass
-
-    _ttkb_msgs.initialize_localities = _safe_init_loc
+    ttkbootstrap.localization.initialize_localities = bool
 except Exception:
     pass
 from focus_mode_app.core.storage import load_blocked_items
