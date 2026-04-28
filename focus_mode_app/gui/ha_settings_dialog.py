@@ -12,7 +12,7 @@ Campi:
 """
 
 import logging
-import threading
+import uuid
 import tkinter as tk
 from tkinter import ttk
 
@@ -77,9 +77,7 @@ class HASettingsPanel:
         ).grid(row=5, column=0, columnspan=2, sticky="w", pady=(0, 10))
 
         # ── Webhook ID ────────────────────────────────────────────────
-        ttk.Label(f, text="Webhook ID (dopo registrazione):").grid(
-            row=6, column=0, sticky="w", pady=(0, 2)
-        )
+        ttk.Label(f, text="Webhook ID:").grid(row=6, column=0, sticky="w", pady=(0, 2))
         wh_frame = ttk.Frame(f)
         wh_frame.grid(row=7, column=0, columnspan=2, sticky="ew", pady=(0, 2))
         self._wh_var = tk.StringVar()
@@ -102,11 +100,12 @@ class HASettingsPanel:
             command=self._save,
         ).grid(row=9, column=0, columnspan=2, sticky="ew", pady=(0, 6))
 
-        # ── Registra dispositivo ──────────────────────────────────────
-        self._reg_btn = ttk.Button(
-            f, text="Registra dispositivo", command=self._register
-        )
-        self._reg_btn.grid(row=10, column=0, columnspan=2, sticky="ew", pady=(0, 8))
+        # ── Rigenera Webhook ID ───────────────────────────────────────
+        ttk.Button(
+            f,
+            text="Rigenera Webhook ID",
+            command=self._regen_webhook,
+        ).grid(row=10, column=0, columnspan=2, sticky="ew", pady=(0, 8))
 
         # ── Feedback ─────────────────────────────────────────────────
         self._feedback_var = tk.StringVar()
@@ -148,7 +147,13 @@ class HASettingsPanel:
             self._msg("Inserisci URL e Token prima di salvare.", error=True)
             _LOGGER.warning("Save aborted: missing ha_url or llat")
             return
-        if save_ha_config(llat=llat, ha_url=ha_url):
+        # Auto-generate webhook_id on first save if not already present.
+        webhook_id = self._wh_var.get().strip()
+        if not webhook_id:
+            webhook_id = str(uuid.uuid4()).replace("-", "")
+            self._wh_var.set(webhook_id)
+            _LOGGER.info("Auto-generated webhook_id: %s", webhook_id)
+        if save_ha_config(llat=llat, ha_url=ha_url, webhook_id=webhook_id):
             self._msg("Configurazione salvata.")
             _LOGGER.info("Settings saved OK")
         else:
@@ -156,46 +161,14 @@ class HASettingsPanel:
             _LOGGER.error("Settings save FAILED")
 
     # ------------------------------------------------------------------
-    # Registration
+    # Webhook ID management
     # ------------------------------------------------------------------
 
-    def _register(self):
-        ha_url = self._url_var.get().strip()
-        llat = self._llat_var.get().strip()
-        _LOGGER.info("Registration requested: ha_url=%s", ha_url or "(empty)")
-        if not ha_url or not llat:
-            self._msg("Inserisci URL e Token prima di registrare.", error=True)
-            _LOGGER.warning("Registration aborted: missing ha_url or llat")
-            return
-        self._reg_btn.config(state="disabled", text="Registrazione…")
-        self._msg("Connessione a Home Assistant…")
-        threading.Thread(
-            target=self._do_register, args=(ha_url, llat), daemon=True
-        ).start()
-
-    def _do_register(self, ha_url: str, llat: str):
-        from focus_mode_app.core.ha_client import HAClient
-        from focus_mode_app.core.ha_config import save_ha_config
-
-        try:
-            _LOGGER.info("Connecting to HA at %s for device registration…", ha_url)
-            client = HAClient(ha_url=ha_url, llat=llat)
-            webhook_id = client.register_device()
-            save_ha_config(llat=llat, ha_url=ha_url, webhook_id=webhook_id)
-            _LOGGER.info("Registration successful, webhook_id=%s", webhook_id)
-            self._frame.after(0, self._on_ok, webhook_id)
-        except Exception as exc:
-            _LOGGER.error("Registration failed: %s", exc)
-            self._frame.after(0, self._on_err, str(exc))
-
-    def _on_ok(self, webhook_id: str):
-        self._wh_var.set(webhook_id)
-        self._reg_btn.config(state="normal", text="Registra dispositivo")
-        self._msg("Registrato! Copia il Webhook ID nel plugin HACS.")
-
-    def _on_err(self, error: str):
-        self._reg_btn.config(state="normal", text="Registra dispositivo")
-        self._msg(f"Errore: {error}", error=True)
+    def _regen_webhook(self):
+        """Generate a brand-new webhook ID (e.g. after re-installing HACS)."""
+        new_id = str(uuid.uuid4()).replace("-", "")
+        self._wh_var.set(new_id)
+        self._msg("Nuovo Webhook ID generato. Salvare e aggiornare il plugin HACS.")
 
     # ------------------------------------------------------------------
     # Helpers
