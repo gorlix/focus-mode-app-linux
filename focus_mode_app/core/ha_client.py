@@ -32,24 +32,33 @@ _APP_ID = "linux_focus_mode"
 _APP_VERSION = "1.0.0"
 
 _SENSOR_DEFS = [
-    {"unique_id": "focus_active",    "name": "Focus Active",       "type": "binary_sensor"},
-    {"unique_id": "ha_lock_active",  "name": "HA Lock Active",     "type": "binary_sensor"},
-    {"unique_id": "restore_enabled", "name": "Auto-Restore",       "type": "binary_sensor"},
-    {"unique_id": "focus_locked",    "name": "Focus Locked",       "type": "binary_sensor"},
-    {"unique_id": "blocked_count",   "name": "Blocked Apps Count", "type": "sensor"},
-    {"unique_id": "lock_remaining",  "name": "Lock Remaining",     "type": "sensor"},
-    {"unique_id": "app_online",      "name": "App Online",         "type": "binary_sensor"},
+    {"unique_id": "focus_active", "name": "Focus Active", "type": "binary_sensor"},
+    {"unique_id": "ha_lock_active", "name": "HA Lock Active", "type": "binary_sensor"},
+    {"unique_id": "restore_enabled", "name": "Auto-Restore", "type": "binary_sensor"},
+    {"unique_id": "focus_locked", "name": "Focus Locked", "type": "binary_sensor"},
+    {"unique_id": "blocked_count", "name": "Blocked Apps Count", "type": "sensor"},
+    {"unique_id": "lock_remaining", "name": "Lock Remaining", "type": "sensor"},
+    {"unique_id": "app_online", "name": "App Online", "type": "binary_sensor"},
 ]
 
 # Maps HA command actions → api_action_queue entries
 _ACTION_MAP: dict[str, Any] = {
-    "focus_on":    lambda d: {"action": "toggle", "active": True},
-    "focus_off":   lambda d: {"action": "toggle", "active": False},
-    "lock_timer":  lambda d: {"action": "lock", "mode": "timer",  "minutes": d.get("minutes", 25)},
-    "lock_target": lambda d: {"action": "lock", "mode": "target", "hour": d.get("hour", 0), "minute": d.get("minute", 0)},
-    "lock_ha":     lambda d: {"action": "lock", "mode": "ha"},
-    "unlock":      lambda d: {"action": "unlock"},
-    "restore_on":  lambda d: {"action": "set_restore", "enabled": True},
+    "focus_on": lambda d: {"action": "toggle", "active": True},
+    "focus_off": lambda d: {"action": "toggle", "active": False},
+    "lock_timer": lambda d: {
+        "action": "lock",
+        "mode": "timer",
+        "minutes": d.get("minutes", 25),
+    },
+    "lock_target": lambda d: {
+        "action": "lock",
+        "mode": "target",
+        "hour": d.get("hour", 0),
+        "minute": d.get("minute", 0),
+    },
+    "lock_ha": lambda d: {"action": "lock", "mode": "ha"},
+    "unlock": lambda d: {"action": "unlock"},
+    "restore_on": lambda d: {"action": "set_restore", "enabled": True},
     "restore_off": lambda d: {"action": "set_restore", "enabled": False},
 }
 
@@ -83,7 +92,9 @@ class HAClient:
             "os_version": platform.release(),
             "supports_encryption": False,
         }
-        _LOGGER.info("POST %s  device=%s app=%s", url, payload["device_name"], payload["app_id"])
+        _LOGGER.info(
+            "POST %s  device=%s app=%s", url, payload["device_name"], payload["app_id"]
+        )
         resp = requests.post(
             url,
             json=payload,
@@ -110,7 +121,9 @@ class HAClient:
                     timeout=10,
                 )
                 r.raise_for_status()
-                _LOGGER.debug("  sensor OK: %s (%s)", sensor["unique_id"], sensor["type"])
+                _LOGGER.debug(
+                    "  sensor OK: %s (%s)", sensor["unique_id"], sensor["type"]
+                )
             except requests.RequestException as exc:
                 _LOGGER.warning("  sensor FAILED (%s): %s", sensor["unique_id"], exc)
         _LOGGER.info("Sensor registration complete")
@@ -129,13 +142,33 @@ class HAClient:
         remaining = lock.get("remaining_time")
 
         sensors = [
-            {"unique_id": "focus_active",    "state": bool(state.get("active", False)),         "type": "binary_sensor"},
-            {"unique_id": "restore_enabled",  "state": bool(state.get("restore_enabled", True)), "type": "binary_sensor"},
-            {"unique_id": "focus_locked",     "state": locked,                                    "type": "binary_sensor"},
-            {"unique_id": "ha_lock_active",   "state": locked and remaining is None,              "type": "binary_sensor"},
-            {"unique_id": "blocked_count",    "state": len(state.get("blocked_items", [])),       "type": "sensor"},
-            {"unique_id": "lock_remaining",   "state": remaining or "—",                          "type": "sensor"},
-            {"unique_id": "app_online",       "state": True,                                       "type": "binary_sensor"},
+            {
+                "unique_id": "focus_active",
+                "state": bool(state.get("active", False)),
+                "type": "binary_sensor",
+            },
+            {
+                "unique_id": "restore_enabled",
+                "state": bool(state.get("restore_enabled", True)),
+                "type": "binary_sensor",
+            },
+            {"unique_id": "focus_locked", "state": locked, "type": "binary_sensor"},
+            {
+                "unique_id": "ha_lock_active",
+                "state": locked and remaining is None,
+                "type": "binary_sensor",
+            },
+            {
+                "unique_id": "blocked_count",
+                "state": len(state.get("blocked_items", [])),
+                "type": "sensor",
+            },
+            {
+                "unique_id": "lock_remaining",
+                "state": remaining or "—",
+                "type": "sensor",
+            },
+            {"unique_id": "app_online", "state": True, "type": "binary_sensor"},
         ]
         payload = {"type": "update_sensor_states", "data": sensors}
         url = f"{self.ha_url}/api/webhook/{self.webhook_id}"
@@ -145,7 +178,10 @@ class HAClient:
         blocked_n = len(state.get("blocked_items", []))
         _LOGGER.debug(
             "State push → active=%s locked=%s blocked=%d restore=%s",
-            active, locked, blocked_n, state.get("restore_enabled"),
+            active,
+            locked,
+            blocked_n,
+            state.get("restore_enabled"),
         )
         threading.Thread(
             target=self._post_silent,
@@ -215,14 +251,14 @@ class HAClient:
         try:
             import websocket
         except ImportError:
-            _LOGGER.error("websocket-client not installed — HA command reception unavailable")
+            _LOGGER.error(
+                "websocket-client not installed — HA command reception unavailable"
+            )
             self._stop_event.set()
             return
 
         ws_url = (
-            self.ha_url
-            .replace("https://", "wss://")
-            .replace("http://", "ws://")
+            self.ha_url.replace("https://", "wss://").replace("http://", "ws://")
         ) + "/api/websocket"
 
         _LOGGER.info("WS connecting → %s", ws_url)
@@ -243,11 +279,15 @@ class HAClient:
             raise RuntimeError("HA authentication failed — check LLAT")
         _LOGGER.info("WS authenticated (auth_ok)")
 
-        ws.send(json.dumps({
-            "type": "subscribe_events",
-            "id": 1,
-            "event_type": "linux_focus_mode_command",
-        }))
+        ws.send(
+            json.dumps(
+                {
+                    "type": "subscribe_events",
+                    "id": 1,
+                    "event_type": "linux_focus_mode_command",
+                }
+            )
+        )
         msg = json.loads(ws.recv())
         if not msg.get("success"):
             ws.close()
@@ -267,7 +307,9 @@ class HAClient:
             message = json.loads(raw)
             if message.get("type") == "event":
                 data = message.get("event", {}).get("data", {})
-                _LOGGER.info("WS command received: action=%s data=%s", data.get("action"), data)
+                _LOGGER.info(
+                    "WS command received: action=%s data=%s", data.get("action"), data
+                )
                 self._dispatch(data)
 
         _LOGGER.info("WS session ended")

@@ -32,7 +32,9 @@ def get_api_logger() -> logging.Logger:
     API_LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
 
     file_handler = RotatingFileHandler(
-        str(API_LOG_FILE), maxBytes=1048576 * 5, backupCount=3  # 5 MB per file
+        str(API_LOG_FILE),
+        maxBytes=1048576 * 5,
+        backupCount=3,  # 5 MB per file
     )
 
     formatter = logging.Formatter(
@@ -44,5 +46,6 @@ def get_api_logger() -> logging.Logger:
     logger.propagate = False  # Prevent logs from polluting root console loggers
 
     return logger
+
 
 api_logger = get_api_logger()

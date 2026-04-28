@@ -15,6 +15,7 @@ from focus_mode_app.api.logger import api_logger
 
 security = HTTPBearer()
 
+
 def get_or_create_token() -> str:
     """
     Retrieve the exact 32-character authentication token from disk, generating

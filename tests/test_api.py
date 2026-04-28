@@ -15,9 +15,11 @@ from focus_mode_app.api.signals import api_action_queue
 
 client = TestClient(app)
 
+
 def override_verify_token():
     """Mock dependency to bypass filesystem token validation during tests."""
     return "test_token_123"
+
 
 @pytest.fixture(autouse=True)
 def setup_auth_override():
@@ -25,6 +27,7 @@ def setup_auth_override():
     app.dependency_overrides[verify_token] = override_verify_token
     yield
     app.dependency_overrides.clear()
+
 
 @pytest.fixture(autouse=True)
 def clear_queue():
@@ -43,6 +46,7 @@ def clear_queue():
         except queue.Empty:
             break
 
+
 def test_get_state_unauthorized():
     """Ensure accessing endpoints without a valid Bearer token returns 401."""
     # Remove override to test real auth dependency
@@ -60,16 +64,15 @@ def test_get_state_authorized(mock_stats):
     """
     mock_stats.return_value = {
         "blocking_active": True,
-        "focus_lock": {"locked": False, "remaining_time": None, "target_time": None}
+        "focus_lock": {"locked": False, "remaining_time": None, "target_time": None},
     }
 
     # Temporarily override the bound list of blocked_items
     import focus_mode_app.api.server
+
     original_items = focus_mode_app.api.server.blocked_items.copy()
     focus_mode_app.api.server.blocked_items.clear()
-    focus_mode_app.api.server.blocked_items.extend([
-        {"name": "discord", "type": "app"}
-    ])
+    focus_mode_app.api.server.blocked_items.extend([{"name": "discord", "type": "app"}])
 
     try:
         response = client.get("/api/state")
@@ -90,10 +93,7 @@ def test_toggle_blocker_queues_message():
     Ensure that POST /api/toggle safely enqueues the action rather than
     directly mutating the running GUI, preventing PyQt/Tkinter crashes.
     """
-    response = client.post(
-        "/api/toggle",
-        json={"active": True}
-    )
+    response = client.post("/api/toggle", json={"active": True})
 
     assert response.status_code == 200
     data = response.json()

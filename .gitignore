@@ -62,6 +62,12 @@ coverage.xml
 .DS_Store
 Thumbs.db
 
+# ── Debug / investigation scripts ────────────────────────────────────────────
+test_*.py
+patch_*.py
+build_*/
+dist_*/
+
 # ── Misc ─────────────────────────────────────────────────────────────────────
 .env
 .envrc

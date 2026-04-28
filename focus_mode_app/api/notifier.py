@@ -38,11 +38,13 @@ def notify_state_change(event: str, **extra) -> None:
     """
     # Native client path
     from focus_mode_app.core import ha_client as _ha
+
     if _ha.push_current_state():
         return
 
     # Legacy fallback
     from focus_mode_app.core.ha_config import get_state_event_url
+
     url = get_state_event_url()
     if not url:
         return

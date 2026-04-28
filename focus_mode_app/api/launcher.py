@@ -29,18 +29,14 @@ def _find_free_port(start: int, attempts: int = 5) -> int:
             s.settimeout(0.1)
             if s.connect_ex(("127.0.0.1", port)) != 0:
                 return port  # connection refused → port is free
-    raise RuntimeError(
-        f"No free port found between {start} and {start + attempts - 1}"
-    )
+    raise RuntimeError(f"No free port found between {start} and {start + attempts - 1}")
 
 
 def _run_uvicorn() -> None:
     global _api_server
     port = _find_free_port(API_PORT)
     if port != API_PORT:
-        api_logger.warning(
-            "Port %d in use — using %d instead", API_PORT, port
-        )
+        api_logger.warning("Port %d in use — using %d instead", API_PORT, port)
     config = uvicorn.Config(
         app=app,
         host=API_HOST,
@@ -86,6 +82,7 @@ def stop_api() -> None:
 # ------------------------------------------------------------------
 # HA client lifecycle helpers
 # ------------------------------------------------------------------
+
 
 def _start_ha_client() -> None:
     """Initialise HAClient from saved config and start the WS listener."""

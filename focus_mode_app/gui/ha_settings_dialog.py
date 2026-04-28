@@ -27,7 +27,9 @@ class HASettingsPanel:
 
     def __init__(self, parent: tk.Widget):
         self._parent = parent
-        self._frame = ttk.LabelFrame(parent, text="Impostazioni Home Assistant", padding=12)
+        self._frame = ttk.LabelFrame(
+            parent, text="Impostazioni Home Assistant", padding=12
+        )
         self._build()
         self._load()
 
@@ -50,9 +52,9 @@ class HASettingsPanel:
         ttk.Entry(f, textvariable=self._url_var, width=42).grid(
             row=1, column=0, columnspan=2, sticky="ew", pady=(0, 2)
         )
-        ttk.Label(f, text="es: https://homeassistant.local:8123", foreground="gray").grid(
-            row=2, column=0, columnspan=2, sticky="w", pady=(0, 10)
-        )
+        ttk.Label(
+            f, text="es: https://homeassistant.local:8123", foreground="gray"
+        ).grid(row=2, column=0, columnspan=2, sticky="w", pady=(0, 10))
 
         # ── LLAT ──────────────────────────────────────────────────────
         ttk.Label(f, text="Long-Lived Access Token (LLAT):").grid(
@@ -63,12 +65,16 @@ class HASettingsPanel:
         self._llat_var = tk.StringVar()
         self._llat_entry = ttk.Entry(llat_frame, textvariable=self._llat_var, show="*")
         self._llat_entry.pack(side="left", fill="x", expand=True)
-        self._show_btn = ttk.Button(llat_frame, text="Mostra", width=8, command=self._toggle_llat)
+        self._show_btn = ttk.Button(
+            llat_frame, text="Mostra", width=8, command=self._toggle_llat
+        )
         self._show_btn.pack(side="left", padx=(6, 0))
 
-        ttk.Label(f, text="HA → Profilo → Sicurezza → Token di lunga durata", foreground="gray").grid(
-            row=5, column=0, columnspan=2, sticky="w", pady=(0, 10)
-        )
+        ttk.Label(
+            f,
+            text="HA → Profilo → Sicurezza → Token di lunga durata",
+            foreground="gray",
+        ).grid(row=5, column=0, columnspan=2, sticky="w", pady=(0, 10))
 
         # ── Webhook ID ────────────────────────────────────────────────
         ttk.Label(f, text="Webhook ID (dopo registrazione):").grid(
@@ -77,14 +83,16 @@ class HASettingsPanel:
         wh_frame = ttk.Frame(f)
         wh_frame.grid(row=7, column=0, columnspan=2, sticky="ew", pady=(0, 2))
         self._wh_var = tk.StringVar()
-        ttk.Entry(wh_frame, textvariable=self._wh_var, state="readonly", foreground="blue").pack(
-            side="left", fill="x", expand=True
-        )
+        ttk.Entry(
+            wh_frame, textvariable=self._wh_var, state="readonly", foreground="blue"
+        ).pack(side="left", fill="x", expand=True)
         ttk.Button(wh_frame, text="Copia", width=8, command=self._copy_wh).pack(
             side="left", padx=(6, 0)
         )
         ttk.Label(
-            f, text="Incolla nel config flow del plugin HACS su Home Assistant.", foreground="gray"
+            f,
+            text="Incolla nel config flow del plugin HACS su Home Assistant.",
+            foreground="gray",
         ).grid(row=8, column=0, columnspan=2, sticky="w", pady=(0, 14))
 
         # ── Salva (riga dedicata, piena larghezza) ────────────────────
@@ -102,7 +110,9 @@ class HASettingsPanel:
 
         # ── Feedback ─────────────────────────────────────────────────
         self._feedback_var = tk.StringVar()
-        self._feedback_lbl = ttk.Label(f, textvariable=self._feedback_var, foreground="#388E3C")
+        self._feedback_lbl = ttk.Label(
+            f, textvariable=self._feedback_var, foreground="#388E3C"
+        )
         self._feedback_lbl.grid(row=11, column=0, columnspan=2, sticky="w", pady=(0, 2))
 
         f.columnconfigure(0, weight=1)
@@ -113,6 +123,7 @@ class HASettingsPanel:
 
     def _load(self):
         from focus_mode_app.core.ha_config import load_ha_config
+
         cfg = load_ha_config()
         self._url_var.set(cfg.get("ha_url", ""))
         self._llat_var.set(cfg.get("llat", ""))
@@ -125,9 +136,14 @@ class HASettingsPanel:
 
     def _save(self):
         from focus_mode_app.core.ha_config import save_ha_config
+
         ha_url = self._url_var.get().strip()
         llat = self._llat_var.get().strip()
-        _LOGGER.info("Save requested: ha_url=%s llat=%s", ha_url or "(empty)", "***" if llat else "(empty)")
+        _LOGGER.info(
+            "Save requested: ha_url=%s llat=%s",
+            ha_url or "(empty)",
+            "***" if llat else "(empty)",
+        )
         if not ha_url or not llat:
             self._msg("Inserisci URL e Token prima di salvare.", error=True)
             _LOGGER.warning("Save aborted: missing ha_url or llat")
@@ -153,11 +169,14 @@ class HASettingsPanel:
             return
         self._reg_btn.config(state="disabled", text="Registrazione…")
         self._msg("Connessione a Home Assistant…")
-        threading.Thread(target=self._do_register, args=(ha_url, llat), daemon=True).start()
+        threading.Thread(
+            target=self._do_register, args=(ha_url, llat), daemon=True
+        ).start()
 
     def _do_register(self, ha_url: str, llat: str):
         from focus_mode_app.core.ha_client import HAClient
         from focus_mode_app.core.ha_config import save_ha_config
+
         try:
             _LOGGER.info("Connecting to HA at %s for device registration…", ha_url)
             client = HAClient(ha_url=ha_url, llat=llat)
