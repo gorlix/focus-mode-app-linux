@@ -98,7 +98,6 @@ class AppGui(ttk.Window):
     def _create_widgets(self):
         """Crea tutti i widget dell'interfaccia principale."""
         main_frame = create_card_frame(self, padx=24, pady=24)
-        self._main_frame = main_frame
 
         self._create_title(main_frame)
         self._create_toggle_button(main_frame)
@@ -107,12 +106,22 @@ class AppGui(ttk.Window):
         self._create_blocked_section(main_frame)
         self._create_feedback_label(main_frame)
         self._create_action_buttons(main_frame)
-        self._create_ha_panel(main_frame)
 
     def _create_title(self, parent):
-        """Crea il titolo principale dell'interfaccia."""
-        title = material_label(parent, "Focus Mode App", style_type="title")
-        title.pack(pady=(0, 10))
+        """Crea la riga titolo con il tasto ⚙ impostazioni HA a destra."""
+        header = ttk.Frame(parent)
+        header.pack(fill="x", pady=(0, 10))
+
+        material_label(header, "Focus Mode App", style_type="title").pack(
+            side="left", expand=True
+        )
+        ttk.Button(
+            header,
+            text="⚙",
+            width=3,
+            command=self._open_ha_settings,
+            bootstyle="info-outline",
+        ).pack(side="right")
 
     def _create_toggle_button(self, parent):
         """Crea il bottone toggle per attivare/disattivare il blocco."""
@@ -438,54 +447,46 @@ class AppGui(ttk.Window):
         self.feedback_label.pack(pady=(8, 0))
 
     def _create_action_buttons(self, parent):
-        """Crea i bottoni azioni principali (aggiorna, impostazioni HA, esci)."""
+        """Crea i bottoni azioni principali (aggiorna, esci)."""
         actions_frame = ttk.Frame(parent)
         actions_frame.pack(fill="x", pady=(8, 0))
 
-        btn_refresh = material_button(
+        material_button(
             actions_frame,
             "Aggiorna",
             self.refresh_list,
-            button_type="secondary"
-        )
-        btn_refresh.pack(side="left", expand=True, fill="x", padx=(0, 4))
+            button_type="secondary",
+        ).pack(side="left", expand=True, fill="x", padx=(0, 4))
 
-        self._btn_ha = ttk.Button(
-            actions_frame,
-            text="Impostazioni HA ▼",
-            command=self._toggle_ha_panel,
-            bootstyle="info-outline"
-        )
-        self._btn_ha.pack(side="left", expand=True, fill="x", padx=(0, 4))
-
-        btn_quit = ttk.Button(
+        ttk.Button(
             actions_frame,
             text="Esci",
             command=self.quit_app,
-            bootstyle="danger"
-        )
-        btn_quit.pack(side="right", expand=True, fill="x", padx=(4, 0))
+            bootstyle="danger",
+        ).pack(side="right", expand=True, fill="x", padx=(4, 0))
 
-    def _create_ha_panel(self, parent):
-        """Crea il pannello HA inline (inizialmente nascosto)."""
+    def _open_ha_settings(self):
+        """Apre il popup impostazioni HA. Se già aperto lo porta in primo piano."""
+        import tkinter as tk
         from focus_mode_app.gui.ha_settings_dialog import HASettingsPanel
-        self._ha_panel = HASettingsPanel(parent)
-        self._ha_panel_visible = False
 
-    def _toggle_ha_panel(self):
-        """Mostra/nasconde il pannello HA inline ridimensionando la finestra."""
-        if self._ha_panel_visible:
-            self._ha_panel.frame.pack_forget()
-            self._ha_panel_visible = False
-            self._btn_ha.config(text="Impostazioni HA ▼")
-            self.geometry(f"{WINDOW_WIDTH}x{WINDOW_HEIGHT}")
-        else:
-            self._ha_panel.frame.pack(fill="x", pady=(8, 0))
-            self._ha_panel_visible = True
-            self._btn_ha.config(text="Impostazioni HA ▲")
-            self.update_idletasks()
-            new_h = self.winfo_reqheight()
-            self.geometry(f"{WINDOW_WIDTH}x{new_h}")
+        if hasattr(self, "_ha_win") and self._ha_win.winfo_exists():
+            self._ha_win.lift()
+            self._ha_win.focus_force()
+            return
+
+        win = tk.Toplevel(self)
+        win.title("Impostazioni Home Assistant")
+        win.resizable(True, True)
+        win.transient(self)
+
+        panel = HASettingsPanel(win)
+        panel.frame.pack(fill="both", expand=True, padx=8, pady=8)
+
+        win.update_idletasks()
+        win.minsize(win.winfo_reqwidth(), win.winfo_reqheight())
+
+        self._ha_win = win
 
     # ========================================================================
     # GESTIONE BLOCCO
