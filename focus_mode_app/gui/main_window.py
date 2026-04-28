@@ -276,6 +276,8 @@ class AppGui(ttk.Window):
                 toggle_blocking()
                 self.update_toggle_button()
 
+            self._push_ha_state()
+
         except ValueError:
             self.show_feedback("Inserisci valori numerici validi")
         except Exception as e:
@@ -505,6 +507,11 @@ class AppGui(ttk.Window):
     # GESTIONE BLOCCO
     # ========================================================================
 
+    def _push_ha_state(self) -> None:
+        """Fire-and-forget webhook push to HA — no-op if not configured."""
+        from focus_mode_app.core.ha_client import push_current_state
+        push_current_state()
+
     def toggle_blocking(self):
         """
         Attiva/disattiva il blocco e aggiorna l'interfaccia.
@@ -519,8 +526,8 @@ class AppGui(ttk.Window):
 
         toggle_blocking()
         self.update_toggle_button()
-
         update_tray_menu()
+        self._push_ha_state()
 
     def update_toggle_button(self):
         """Aggiorna il testo e lo stile del bottone toggle in base allo stato."""
@@ -682,6 +689,7 @@ class AppGui(ttk.Window):
                 bootstyle="success-outline"
             )
             self.show_feedback("Auto-restore DISABILITATO")
+        self._push_ha_state()
 
     # ========================================================================
     # GESTIONE ELEMENTI BLOCCATI
@@ -713,6 +721,7 @@ class AppGui(ttk.Window):
             self.listbox.insert("end", f"{name}")
             self.show_feedback(f"{name} aggiunto e salvato!")
             self.entry.delete(0, "end")
+            self._push_ha_state()
         else:
             self.show_feedback("Elemento già presente o non valido")
 
@@ -740,6 +749,7 @@ class AppGui(ttk.Window):
         if remove_blocked_item(index):
             self.listbox.delete(index)
             self.show_feedback(f"{item_name} rimosso!")
+            self._push_ha_state()
         else:
             self.show_feedback("Errore durante la rimozione")
 
