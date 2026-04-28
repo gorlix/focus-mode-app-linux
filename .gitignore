@@ -211,3 +211,6 @@ __marimo__/
 
 # Ignore Data
 data/
+
+# Keep PyInstaller packaging spec
+!packaging/*.spec

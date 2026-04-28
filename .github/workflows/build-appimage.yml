@@ -1,0 +1,137 @@
+name: Build and Release AppImage
+
+# Triggered only when a version tag is pushed (e.g. v2.1.0)
+on:
+  push:
+    tags:
+      - 'v[0-9]*.[0-9]*.[0-9]*'
+
+permissions:
+  contents: write   # needed to create the GitHub Release
+
+jobs:
+  build-appimage:
+    name: Build AppImage (x86_64)
+    runs-on: ubuntu-22.04   # glibc 2.35 — compatible with Ubuntu 22.04+
+
+    steps:
+      # -----------------------------------------------------------------------
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # -----------------------------------------------------------------------
+      - name: Extract version metadata from tag
+        id: meta
+        run: |
+          TAG="${GITHUB_REF_NAME}"                         # e.g. v2.1.0
+          VERSION="${TAG#v}"                               # e.g. 2.1.0
+          APPIMAGE="Focus-Mode-App-${VERSION}-x86_64.AppImage"
+          echo "tag=${TAG}"           >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}"   >> "$GITHUB_OUTPUT"
+          echo "appimage=${APPIMAGE}" >> "$GITHUB_OUTPUT"
+
+      # -----------------------------------------------------------------------
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y \
+            python3.10 python3.10-dev python3.10-venv python3.10-tk \
+            tk-dev \
+            libgl1 libdbus-1-3 libglib2.0-0 \
+            libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-render-util0 \
+            libxcb-xinerama0 libxkbcommon-x11-0 \
+            upx-ucl zsync \
+            wget
+
+      # -----------------------------------------------------------------------
+      - name: Create venv and install Python dependencies
+        run: |
+          python3.10 -m venv .venv
+          .venv/bin/pip install --upgrade pip wheel
+          .venv/bin/pip install pyinstaller==6.11.0
+          .venv/bin/pip install -r requirements.txt
+
+      # -----------------------------------------------------------------------
+      # Stamp the tag version into pyproject.toml so importlib.metadata returns
+      # the correct string at runtime (used by the auto-update checker).
+      - name: Stamp version into pyproject.toml
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          sed -i "s/^version = .*/version = \"${VERSION}\"/" pyproject.toml
+          .venv/bin/pip install -e . --quiet
+
+      # -----------------------------------------------------------------------
+      - name: Generate application icon
+        run: .venv/bin/python packaging/generate_icon.py
+
+      # -----------------------------------------------------------------------
+      - name: Build with PyInstaller
+        run: |
+          .venv/bin/pyinstaller \
+            packaging/focus-mode-app.spec \
+            --distpath dist \
+            --workpath /tmp/pyinstaller-work \
+            --noconfirm
+
+      # -----------------------------------------------------------------------
+      - name: Assemble AppDir
+        run: |
+          mkdir -p AppDir
+          # PyInstaller one-dir output → AppDir root
+          cp -r dist/focus-mode-app/. AppDir/
+          # AppImage metadata
+          install -m 755 appimage/AppRun                 AppDir/AppRun
+          install -m 644 appimage/focus-mode-app.desktop AppDir/focus-mode-app.desktop
+          install -m 644 appimage/focus-mode-app.png     AppDir/focus-mode-app.png
+          # .DirIcon is the icon shown by file managers
+          ln -sf focus-mode-app.png AppDir/.DirIcon
+
+      # -----------------------------------------------------------------------
+      - name: Download appimagetool
+        run: |
+          wget -q \
+            "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage" \
+            -O /tmp/appimagetool
+          chmod +x /tmp/appimagetool
+
+      # -----------------------------------------------------------------------
+      # The --updateinformation string is embedded in the AppImage binary.
+      # appimageupdatetool reads it to know where to fetch the .zsync file.
+      # Format: gh-releases-zsync|USER|REPO|RELEASE|FILENAME_GLOB
+      - name: Build AppImage with update metadata
+        env:
+          APPIMAGE_EXTRACT_AND_RUN: "1"   # run without FUSE in CI
+          VERSION:  ${{ steps.meta.outputs.version }}
+          APPIMAGE: ${{ steps.meta.outputs.appimage }}
+        run: |
+          UPDATE_INFO="gh-releases-zsync|gorlix|focus-mode-app-linux|latest|Focus-Mode-App-*-x86_64.AppImage.zsync"
+          /tmp/appimagetool \
+            --updateinformation "$UPDATE_INFO" \
+            AppDir \
+            "$APPIMAGE"
+          chmod +x "$APPIMAGE"
+
+      # -----------------------------------------------------------------------
+      # zsync enables delta updates: appimageupdatetool downloads only the
+      # changed blocks instead of the full AppImage (~5-10x smaller downloads).
+      - name: Generate zsync file for delta updates
+        env:
+          APPIMAGE: ${{ steps.meta.outputs.appimage }}
+        run: |
+          zsyncmake "$APPIMAGE" -u "$APPIMAGE"
+          # Verify both files exist
+          ls -lh "$APPIMAGE" "${APPIMAGE}.zsync"
+
+      # -----------------------------------------------------------------------
+      - name: Create GitHub Release and upload assets
+        uses: softprops/action-gh-release@v2
+        with:
+          name: "Focus Mode App ${{ steps.meta.outputs.tag }}"
+          draft: false
+          # Tags containing "-" (e.g. v2.1.0-beta) are marked as pre-release
+          prerelease: ${{ contains(steps.meta.outputs.tag, '-') }}
+          generate_release_notes: true
+          files: |
+            ${{ steps.meta.outputs.appimage }}
+            ${{ steps.meta.outputs.appimage }}.zsync

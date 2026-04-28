@@ -68,6 +68,22 @@ def cleanup_handlers() -> None:
         pass
 
 
+def _start_update_check() -> None:
+    """Fire-and-forget update check — only runs when launched from an AppImage."""
+    from focus_mode_app.core.updater import check_for_updates
+    from focus_mode_app.core.notifications import send_desktop_notification
+
+    def _on_update(new_version: str) -> None:
+        send_desktop_notification(
+            "Focus Mode App — Update Available",
+            f"Version {new_version} is available.\n"
+            "Run: appimageupdatetool $APPIMAGE",
+            "software-update-available",
+        )
+
+    check_for_updates(_on_update)
+
+
 def signal_handler(signum: int, frame: Optional[object]) -> None:
     """Handle termination signals to gracefully shut down the app."""
     print("\n[INFO] Termination signal received")
@@ -115,6 +131,9 @@ def main() -> None:
     # Qt must run on the main thread. setup_tray_icon() creates the icon;
     # run_qt_with_tkinter() starts exec() and drives Tkinter via QTimer.
     setup_tray_icon(_app_instance)
+
+    # Check for AppImage updates in the background (no-op when not an AppImage).
+    _start_update_check()
 
     # ========================================================================
     # MAIN LOOP (Qt event loop — replaces tk.mainloop())

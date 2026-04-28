@@ -1,0 +1,15 @@
+#!/bin/bash
+# AppRun — entry point for the Focus Mode App AppImage.
+# Sets up Qt platform detection before launching the PyInstaller bundle.
+
+SELF="$(readlink -f "$0")"
+HERE="${SELF%/*}"
+
+# Prefer native Wayland for the Qt tray icon; Tkinter uses XWayland internally.
+if [ -z "$QT_QPA_PLATFORM" ]; then
+    if [ "$XDG_SESSION_TYPE" = "wayland" ]; then
+        export QT_QPA_PLATFORM=wayland
+    fi
+fi
+
+exec "$HERE/focus-mode-app" "$@"
