@@ -190,7 +190,7 @@ class FocusLock:
         Returns:
             Dict[str, Any]: A dictionary detailing lock mode, status, and remaining time.
         """
-        if not self.is_locked() or self.lock_end_time is None:
+        if not self.is_locked():
             return {"locked": False, "mode": "none", "remaining_time": "00:00"}
 
         if self.lock_mode == LockMode.HA_LOCK:
