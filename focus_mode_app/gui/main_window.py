@@ -547,8 +547,10 @@ class AppGui(ttk.Window):
     def on_remote_toggle(self, active: bool):
         """
         Gestisce il toggle ricevuto dalla coda API sul thread GUI principale.
+        Usa toggle_blocking() (non set_blocking_active) per attivare auto-restore.
         """
-        set_blocking_active(active)
+        if active != is_blocking_active():
+            toggle_blocking()
         self.update_toggle_button()
         update_tray_menu()
 
