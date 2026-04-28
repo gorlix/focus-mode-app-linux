@@ -15,7 +15,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$ROOT"
 
-VERSION="${1:-dev}"
+VERSION="${1:-0.0.0.dev0}"
 APPIMAGE="Focus-Mode-App-${VERSION}-x86_64.AppImage"
 
 echo "==> Building Focus Mode App AppImage v${VERSION}"
@@ -62,7 +62,10 @@ echo "==> Installing / updating dependencies"
 "$PY" -m pip install --quiet -r requirements.txt
 
 # Stamp version so importlib.metadata returns the right string at runtime.
+# Restore pyproject.toml afterwards so the working tree stays clean.
+ORIG_VERSION=$(grep '^version' pyproject.toml | head -1 | sed 's/.*= *"\(.*\)"/\1/')
 sed -i "s/^version = .*/version = \"${VERSION}\"/" pyproject.toml
+trap 'sed -i "s/^version = .*/version = \"${ORIG_VERSION}\"/" pyproject.toml' EXIT
 "$PY" -m pip install --quiet -e .
 
 # ── icon ────────────────────────────────────────────────────────────────────
