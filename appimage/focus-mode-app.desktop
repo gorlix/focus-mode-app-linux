@@ -1,0 +1,9 @@
+[Desktop Entry]
+Name=Focus Mode App
+Comment=Block distracting apps and websites during study sessions
+Exec=focus-mode-app
+Icon=focus-mode-app
+Type=Application
+Categories=Utility;Productivity;
+Keywords=focus;study;block;productivity;distraction;
+StartupNotify=true
