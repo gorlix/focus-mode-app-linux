@@ -4,13 +4,15 @@ Contiene utilities e componenti riutilizzabili.
 """
 
 from .tray_icon import (
-    create_and_run_tray_icon,
+    setup_tray_icon,
+    run_qt_with_tkinter,
     update_tray_menu,
     stop_tray_icon,
 )
 
 __all__ = [
-    "create_and_run_tray_icon",
+    "setup_tray_icon",
+    "run_qt_with_tkinter",
     "update_tray_menu",
     "stop_tray_icon",
 ]
