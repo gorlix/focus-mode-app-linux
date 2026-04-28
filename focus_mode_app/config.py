@@ -5,6 +5,7 @@ Contains constants, file paths, and modifiable settings.
 """
 
 import os
+import sys
 from pathlib import Path
 from typing import Dict, Any
 
@@ -12,11 +13,25 @@ from typing import Dict, Any
 # FILE AND DIRECTORY PATHS
 # ============================================================================
 
-# Base directory of the project (where main.py is located)
-BASE_DIR = Path(__file__).resolve().parent
+# Package directory — read-only inside an AppImage mount
+PACKAGE_DIR = Path(__file__).resolve().parent
 
-# Directory for data persistence
-DATA_DIR = BASE_DIR / "data"
+# Directory for static assets (icons, images) — always next to the package
+ASSETS_DIR = PACKAGE_DIR / "assets"
+
+# When running as a PyInstaller/AppImage bundle the package directory is on a
+# read-only FUSE mount.  Redirect all writable paths to XDG user directories.
+if getattr(sys, "frozen", False):
+    _xdg_data = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
+    _xdg_cache = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache"))
+    DATA_DIR = _xdg_data / "focus_mode_app" / "data"
+    LOG_FILE = _xdg_cache / "focus_mode_app" / "focus_mode_app.log"
+else:
+    DATA_DIR = PACKAGE_DIR / "data"
+    LOG_FILE = PACKAGE_DIR / "logs" / "focus_mode_app.log"
+
+# Keep BASE_DIR pointing at the package dir for legacy references (assets, etc.)
+BASE_DIR = PACKAGE_DIR
 
 # JSON file for saving blocked apps/webapps
 DATA_FILE = DATA_DIR / "blocked_apps.json"
@@ -26,9 +41,6 @@ RESTORE_CONFIG_FILE = DATA_DIR / "restore_config.json"
 
 # JSON file for tracking the active session's killed apps (runtime backup)
 SESSION_FILE = DATA_DIR / "session_backup.json"
-
-# Directory for static assets (icons, images)
-ASSETS_DIR = BASE_DIR / "assets"
 
 # ============================================================================
 # BLOCKING CONFIGURATIONS
@@ -102,9 +114,6 @@ CONSOLE_LOGGING = True
 # Enable file logging output
 FILE_LOGGING = False
 
-# Path to the log file (if FILE_LOGGING is True)
-LOG_FILE = BASE_DIR / "logs" / "focus_mode_app.log"
-
 # Logging level (DEBUG, INFO, WARNING, ERROR, CRITICAL)
 LOG_LEVEL = "INFO"
 
@@ -148,9 +157,8 @@ def detect_platform() -> str:
 
 
 def ensure_directories() -> None:
-    """Ensure that all necessary data and asset directories exist."""
+    """Ensure that all necessary data and log directories exist."""
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    ASSETS_DIR.mkdir(parents=True, exist_ok=True)
 
     if FILE_LOGGING:
         LOG_FILE.parent.mkdir(parents=True, exist_ok=True)

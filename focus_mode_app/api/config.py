@@ -5,7 +5,11 @@ Provides the environment variables and paths necessary to run the standalone
 API server without conflicting with the main application configuration.
 """
 
-from focus_mode_app.config import DATA_DIR, BASE_DIR
+import os
+import sys
+from pathlib import Path
+
+from focus_mode_app.config import DATA_DIR
 
 # ---------------------------------------------------------------------------- #
 # SERVER CONFIGURATIONS
@@ -37,5 +41,11 @@ API_AUTH_TOKEN_FILE = DATA_DIR / "auth_token.txt"
 # LOGGING
 # ---------------------------------------------------------------------------- #
 
-API_LOG_FILE = BASE_DIR / "logs" / "focus_mode_api.log"
+if getattr(sys, "frozen", False):
+    _xdg_cache = Path(os.environ.get("XDG_CACHE_HOME", Path.home() / ".cache"))
+    API_LOG_FILE = _xdg_cache / "focus_mode_app" / "focus_mode_api.log"
+else:
+    API_LOG_FILE = (
+        Path(__file__).resolve().parent.parent / "logs" / "focus_mode_api.log"
+    )
 """Path: Dedicated log file for API requests to maintain isolation from standard logs."""
