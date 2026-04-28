@@ -8,7 +8,7 @@ Non è una finestra separata — appare/scompare dentro la stessa GUI.
 Campi:
   - URL di Home Assistant
   - Long-Lived Access Token (LLAT)
-  - Webhook ID (read-only, generato dopo "Registra")
+  - Webhook ID (auto-generato al primo salvataggio, ricopiabile)
 """
 
 import logging
