@@ -72,6 +72,7 @@ class AppGui(ttk.Window):
         Polls the thread-safe queue ogni 200ms per rilevare azioni richieste
         dal server API in background e le gestisce in modo sicuro sul thread GUI.
         """
+        _did_act = False
         try:
             while True:
                 msg = self.api_queue.get_nowait()
@@ -85,9 +86,13 @@ class AppGui(ttk.Window):
                 elif action == "set_restore":
                     self.on_remote_set_restore(msg["enabled"])
                 self.api_queue.task_done()
+                _did_act = True
         except queue.Empty:
             pass
         finally:
+            if _did_act:
+                from focus_mode_app.core.ha_client import push_current_state
+                push_current_state()
             self.after(200, self.check_api_queue)
 
 
@@ -311,6 +316,14 @@ class AppGui(ttk.Window):
 
         except Exception as e:
             print(f"[ERROR] Timer display update: {e}")
+
+        # Periodic HA state push every 30 s — keeps lock_remaining and
+        # app_online fresh in HA without spamming the webhook every second.
+        self._ha_tick = getattr(self, "_ha_tick", 0) + 1
+        if self._ha_tick >= 30:
+            self._ha_tick = 0
+            from focus_mode_app.core.ha_client import push_current_state
+            push_current_state()
 
         self.after(1000, self.update_timer_display)
 
