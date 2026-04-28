@@ -18,6 +18,22 @@ elif [ -d "$HERE/tcl8.6" ]; then
     export TK_LIBRARY="$HERE/tk8.6"
 fi
 
+# Use the system CA bundle so SSL works with any certificate (including
+# custom/internal CAs and up-to-date root certificates).
+# The bundled certifi CA bundle compiled on Ubuntu may be missing CAs present
+# on the user's system.  requests and websocket-client both honour these vars.
+for _ca_bundle in \
+    /etc/ssl/certs/ca-certificates.crt \
+    /etc/pki/tls/certs/ca-bundle.crt \
+    /etc/ssl/cert.pem
+do
+    if [ -f "$_ca_bundle" ]; then
+        export SSL_CERT_FILE="$_ca_bundle"
+        export REQUESTS_CA_BUNDLE="$_ca_bundle"
+        break
+    fi
+done
+
 # Prefer native Wayland for the Qt tray icon; Tkinter uses XWayland internally.
 if [ -z "$QT_QPA_PLATFORM" ]; then
     if [ "$XDG_SESSION_TYPE" = "wayland" ]; then
