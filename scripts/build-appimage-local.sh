@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# build-appimage-local.sh — build a local AppImage for testing (no CI needed).
+# build-appimage-local.sh — build a local AppImage for developer testing.
 #
 # Usage:
 #   ./scripts/build-appimage-local.sh [VERSION]
@@ -7,10 +7,7 @@
 # VERSION defaults to "dev" if omitted.
 # Output: Focus-Mode-App-<VERSION>-x86_64.AppImage in the project root.
 #
-# Requirements (install once):
-#   pip install pyinstaller==6.11.0  (inside the venv used below)
-#   wget https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage \
-#       -O ~/bin/appimagetool && chmod +x ~/bin/appimagetool
+# appimagetool is downloaded automatically on first run.
 
 set -euo pipefail
 
@@ -23,25 +20,54 @@ APPIMAGE="Focus-Mode-App-${VERSION}-x86_64.AppImage"
 
 echo "==> Building Focus Mode App AppImage v${VERSION}"
 
+# ── Python ──────────────────────────────────────────────────────────────────
+# Use the system Python (not one from an active venv) to create a fresh venv.
+SYSPY=""
+for candidate in /usr/bin/python3 /usr/bin/python python3 python; do
+    if "$candidate" -c "import sys; assert sys.version_info >= (3, 9)" 2>/dev/null; then
+        SYSPY="$candidate"
+        break
+    fi
+done
+if [ -z "$SYSPY" ]; then
+    echo "ERROR: Python >= 3.9 not found." >&2
+    exit 1
+fi
+PYVER=$("$SYSPY" --version)
+echo "==> Using $SYSPY ($PYVER)"
+
 # ── venv ────────────────────────────────────────────────────────────────────
-VENV="${ROOT}/.venv"
-if [ ! -f "$VENV/bin/python" ]; then
-    echo "==> Creating venv"
-    python3 -m venv "$VENV"
+VENV="${ROOT}/.venv-appimage"
+
+# Recreate the venv if it's broken (e.g. the Python it was built with was removed).
+if [ -d "$VENV" ]; then
+    if ! "$VENV/bin/python" -c "import sys" 2>/dev/null; then
+        echo "==> Detected broken venv — recreating"
+        rm -rf "$VENV"
+    fi
 fi
 
-echo "==> Installing / updating dependencies"
-"$VENV/bin/pip" install --quiet --upgrade pip wheel
-"$VENV/bin/pip" install --quiet pyinstaller==6.11.0
-"$VENV/bin/pip" install --quiet -r requirements.txt
+if [ ! -d "$VENV" ]; then
+    echo "==> Creating venv at $VENV"
+    "$SYSPY" -m venv "$VENV"
+fi
 
-# Stamp version into pyproject.toml so importlib.metadata returns the right string
+PY="$VENV/bin/python"
+
+echo "==> Installing / updating dependencies"
+"$PY" -m pip install --quiet --upgrade pip wheel
+# For local builds we don't pin PyInstaller to match CI — we use the latest
+# version that supports the system Python.
+"$PY" -m pip install --quiet "pyinstaller>=6.11"
+"$PY" -m pip install --quiet -r requirements.txt
+
+# Stamp version so importlib.metadata returns the right string at runtime.
 sed -i "s/^version = .*/version = \"${VERSION}\"/" pyproject.toml
-"$VENV/bin/pip" install --quiet -e .
+"$PY" -m pip install --quiet -e .
 
 # ── icon ────────────────────────────────────────────────────────────────────
 echo "==> Generating icon"
-"$VENV/bin/python" packaging/generate_icon.py
+"$PY" packaging/generate_icon.py
 
 # ── PyInstaller ─────────────────────────────────────────────────────────────
 echo "==> Running PyInstaller"
@@ -63,7 +89,12 @@ ln -sf focus-mode-app.png AppDir/.DirIcon
 
 # ── appimagetool ────────────────────────────────────────────────────────────
 APPIMAGETOOL=""
-for candidate in "$HOME/bin/appimagetool" "$HOME/.local/bin/appimagetool" /usr/local/bin/appimagetool; do
+for candidate in \
+    "$HOME/bin/appimagetool" \
+    "$HOME/.local/bin/appimagetool" \
+    /usr/local/bin/appimagetool \
+    /usr/bin/appimagetool
+do
     if [ -x "$candidate" ]; then
         APPIMAGETOOL="$candidate"
         break
@@ -71,18 +102,20 @@ for candidate in "$HOME/bin/appimagetool" "$HOME/.local/bin/appimagetool" /usr/l
 done
 
 if [ -z "$APPIMAGETOOL" ]; then
-    echo "==> appimagetool not found — downloading to /tmp/appimagetool"
-    wget -q \
-        "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage" \
-        -O /tmp/appimagetool
-    chmod +x /tmp/appimagetool
-    APPIMAGETOOL=/tmp/appimagetool
+    APPIMAGETOOL=/tmp/appimagetool-local
+    if [ ! -x "$APPIMAGETOOL" ]; then
+        echo "==> Downloading appimagetool"
+        wget -q \
+            "https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage" \
+            -O "$APPIMAGETOOL"
+        chmod +x "$APPIMAGETOOL"
+    fi
 fi
 
-echo "==> Building AppImage with $APPIMAGETOOL"
+echo "==> Building AppImage"
 APPIMAGE_EXTRACT_AND_RUN=1 "$APPIMAGETOOL" AppDir "$APPIMAGE"
 chmod +x "$APPIMAGE"
 
 echo ""
-echo "✓  Built: ${ROOT}/${APPIMAGE}"
-echo "   Run:   ./${APPIMAGE}"
+echo "Built: ${ROOT}/${APPIMAGE}"
+echo "Run:   ./${APPIMAGE}"
