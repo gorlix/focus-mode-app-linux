@@ -146,6 +146,9 @@ def on_toggle_blocking() -> None:
                 _app_gui.after(0, _app_gui.update_toggle_button)
             except Exception:
                 pass
+        from focus_mode_app.core.ha_client import push_current_state
+
+        push_current_state()
     except Exception as e:
         print(f"[ERROR] Toggle: {e}")
 
