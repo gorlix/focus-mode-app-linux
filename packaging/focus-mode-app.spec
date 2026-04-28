@@ -1,23 +1,29 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
 PyInstaller spec for Focus Mode App.
-Build: pyinstaller build/focus-mode-app.spec
+Build: pyinstaller packaging/focus-mode-app.spec
+
+SPECPATH is a PyInstaller built-in that points to the directory containing
+this file (packaging/). We use it to build absolute paths to the project
+root so PyInstaller finds the sources regardless of the working directory.
 """
 
 import os
-from pathlib import Path
 
 block_cipher = None
 
+# Project root is one level above packaging/
+ROOT = os.path.abspath(os.path.join(SPECPATH, ".."))
+
 # Bundle assets only if the directory exists
 datas = []
-assets_dir = Path("focus_mode_app/assets")
-if assets_dir.is_dir():
-    datas.append((str(assets_dir), "focus_mode_app/assets"))
+assets_dir = os.path.join(ROOT, "focus_mode_app", "assets")
+if os.path.isdir(assets_dir):
+    datas.append((assets_dir, "focus_mode_app/assets"))
 
 a = Analysis(
-    ["focus_mode_app/main.py"],
-    pathex=["."],
+    [os.path.join(ROOT, "focus_mode_app", "main.py")],
+    pathex=[ROOT],
     binaries=[],
     datas=datas,
     hiddenimports=[
