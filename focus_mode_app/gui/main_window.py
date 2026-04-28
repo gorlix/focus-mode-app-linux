@@ -17,12 +17,15 @@ from focus_mode_app.core.blocker import (
     is_restore_enabled,
     can_disable_blocking,
 )
+from focus_mode_app.core.focus_lock import focus_lock as _focus_lock
 from focus_mode_app.core.storage import (
     add_blocked_item,
     remove_blocked_item,
     get_blocked_items,
 )
 from focus_mode_app.utils.tray_icon import update_tray_menu
+from focus_mode_app.api.signals import api_action_queue
+import queue
 from focus_mode_app.gui.material_theme import (
     apply_material3_style,
     material_label,
@@ -59,6 +62,36 @@ class AppGui(ttk.Window):
 
         self.protocol("WM_DELETE_WINDOW", self.hide_window)
 
+        # Integrate the remote background API using a thread-safe Queue poll
+        self.api_queue = api_action_queue
+        self.after(200, self.check_api_queue)
+
+    def check_api_queue(self) -> None:
+        """Poll the thread-safe queue every 200ms for API actions and dispatch them on the GUI thread."""
+        _did_act = False
+        try:
+            while True:
+                msg = self.api_queue.get_nowait()
+                action = msg.get("action")
+                if action == "toggle":
+                    self.on_remote_toggle(msg["active"])
+                elif action == "lock":
+                    self.on_remote_lock(msg)
+                elif action == "unlock":
+                    self.on_remote_unlock()
+                elif action == "set_restore":
+                    self.on_remote_set_restore(msg["enabled"])
+                self.api_queue.task_done()
+                _did_act = True
+        except queue.Empty:
+            pass
+        finally:
+            if _did_act:
+                from focus_mode_app.core.ha_client import push_current_state
+
+                push_current_state()
+            self.after(200, self.check_api_queue)
+
     # ========================================================================
     # UI CREATION
     # ========================================================================
@@ -76,20 +109,23 @@ class AppGui(ttk.Window):
         self._create_action_buttons(main_frame)
 
     def _create_title(self, parent: ttk.Frame) -> None:
-        """Create the main title of the interface.
+        """Create the title row with the HA settings gear button on the right."""
+        header = ttk.Frame(parent)
+        header.pack(fill="x", pady=(0, 10))
 
-        Args:
-            parent (ttk.Frame): The parent widget frame.
-        """
-        title = material_label(parent, "Focus Mode App", style_type="title")
-        title.pack(pady=(0, 10))
+        material_label(header, "Focus Mode App", style_type="title").pack(
+            side="left", expand=True
+        )
+        ttk.Button(
+            header,
+            text="⚙",
+            width=3,
+            command=self._open_ha_settings,
+            bootstyle="info-outline",
+        ).pack(side="right")
 
     def _create_toggle_button(self, parent: ttk.Frame) -> None:
-        """Create the toggle button to activate or deactivate the blocker.
-
-        Args:
-            parent (ttk.Frame): The parent widget frame.
-        """
+        """Create the toggle button to activate or deactivate the blocker."""
         self.toggle_btn = ttk.Button(
             parent,
             text="ACTIVATE STUDY MODE",
@@ -103,11 +139,8 @@ class AppGui(ttk.Window):
         """Create the timer/target time panel for focus lock.
 
         Allows the user to set a countdown timer or a target time.
-
-        Args:
-            parent (ttk.Frame): The parent widget frame.
         """
-        timer_frame = ttk.LabelFrame(
+        timer_frame = ttk.Labelframe(
             parent, text="FOCUS LOCK", bootstyle="warning", padding=16
         )
         timer_frame.pack(fill="x", pady=(0, 16))
@@ -237,37 +270,53 @@ class AppGui(ttk.Window):
                 toggle_blocking()
                 self.update_toggle_button()
 
+            self._push_ha_state()
+
         except ValueError:
             self.show_feedback("Enter valid numerical values")
         except Exception as e:
             self.show_feedback(f"Error: {e}")
 
     def update_timer_display(self) -> None:
-        """Update the timer display every second.
+        """Update the focus lock display every second.
 
-        Shows the countdown and manages the state of the disable button.
+        Distinguishes between HA Lock (indefinite, GUI locked) and timer/target lock.
         """
         try:
-            from focus_mode_app.core.focus_lock import focus_lock
-
-            if focus_lock.is_locked():
-                info = focus_lock.get_lock_info()
+            if _focus_lock.is_ha_locked():
                 self.timer_status_label.config(
-                    text=f"LOCKED - {info['remaining_time']} remaining",
+                    text="LOCKED by HA — Only Home Assistant can unlock",
+                    foreground="darkred",
+                )
+                self.toggle_btn.config(state="disabled")
+                self.btn_activate_lock.config(state="disabled")
+
+            elif _focus_lock.is_locked():
+                info = _focus_lock.get_lock_info()
+                self.timer_status_label.config(
+                    text=f"LOCKED — {info['remaining_time']} remaining",
                     foreground="red",
                 )
-
                 if is_blocking_active():
                     self.toggle_btn.config(state="disabled")
+                self.btn_activate_lock.config(state="normal")
+
             else:
                 self.timer_status_label.config(text="No active lock", foreground="gray")
-
                 self.toggle_btn.config(state="normal")
+                self.btn_activate_lock.config(state="normal")
 
-        except ImportError:
-            pass
         except Exception as e:
             print(f"[ERROR] Timer display update: {e}")
+
+        # Periodic HA state push every 30 s — keeps lock_remaining and
+        # app_online fresh in HA without spamming the webhook every second.
+        self._ha_tick = getattr(self, "_ha_tick", 0) + 1
+        if self._ha_tick >= 30:
+            self._ha_tick = 0
+            from focus_mode_app.core.ha_client import push_current_state
+
+            push_current_state()
 
         self.after(1000, self.update_timer_display)
 
@@ -276,11 +325,8 @@ class AppGui(ttk.Window):
 
         Allows the user to select which applications should be automatically
         re-launched when the blocking is disabled.
-
-        Args:
-            parent (ttk.Frame): The parent widget frame.
         """
-        restore_frame = ttk.LabelFrame(
+        restore_frame = ttk.Labelframe(
             parent, text="AUTO-RESTORE ON DISABLE", bootstyle="info", padding=16
         )
         restore_frame.pack(fill="both", expand=False, pady=(0, 16))
@@ -318,12 +364,8 @@ class AppGui(ttk.Window):
         self.refresh_restore_list()
 
     def _create_blocked_section(self, parent: ttk.Frame) -> None:
-        """Create the section to manage blocked items (apps and webapps).
-
-        Args:
-            parent (ttk.Frame): The parent widget frame.
-        """
-        section = ttk.LabelFrame(
+        """Create the section to manage blocked items (apps and webapps)."""
+        section = ttk.Labelframe(
             parent, text="Blocked Items", bootstyle="primary", padding=16
         )
         section.pack(fill="both", expand=True, pady=(0, 16))
@@ -343,11 +385,7 @@ class AppGui(ttk.Window):
         self.listbox.pack(fill="both", expand=True)
 
     def _create_type_selector(self, parent: ttk.Frame) -> None:
-        """Create radio buttons to select the type (native app or webapp).
-
-        Args:
-            parent (ttk.Frame): The parent widget frame.
-        """
+        """Create radio buttons to select the type (native app or webapp)."""
         radio_frame = ttk.Frame(parent)
         radio_frame.pack(fill="x", pady=(0, 12))
 
@@ -374,11 +412,7 @@ class AppGui(ttk.Window):
         self.item_type.trace_add("write", lambda *args: self.update_description())
 
     def _create_item_buttons(self, parent: ttk.Frame) -> None:
-        """Create buttons to add and remove items from the blocklist.
-
-        Args:
-            parent (ttk.Frame): The parent widget frame.
-        """
+        """Create buttons to add and remove items from the blocklist."""
         btn_frame = ttk.Frame(parent)
         btn_frame.pack(fill="x", pady=(0, 8))
 
@@ -393,11 +427,7 @@ class AppGui(ttk.Window):
         btn_remove.pack(side="right", expand=True, fill="x", padx=(4, 0))
 
     def _create_feedback_label(self, parent: ttk.Frame) -> None:
-        """Create the label to display temporary feedback messages.
-
-        Args:
-            parent (ttk.Frame): The parent widget frame.
-        """
+        """Create the label to display temporary feedback messages."""
         self.feedback_label = ttk.Label(
             parent,
             text="",
@@ -408,11 +438,7 @@ class AppGui(ttk.Window):
         self.feedback_label.pack(pady=(8, 0))
 
     def _create_action_buttons(self, parent: ttk.Frame) -> None:
-        """Create the main action buttons (refresh, quit).
-
-        Args:
-            parent (ttk.Frame): The parent widget frame.
-        """
+        """Create the main action buttons (refresh, quit)."""
         actions_frame = ttk.Frame(parent)
         actions_frame.pack(fill="x", pady=(8, 0))
 
@@ -426,9 +452,38 @@ class AppGui(ttk.Window):
         )
         btn_quit.pack(side="right", expand=True, fill="x", padx=(4, 0))
 
+    def _open_ha_settings(self) -> None:
+        """Open the HA settings popup. Brings it to focus if already open."""
+        import tkinter as tk
+        from focus_mode_app.gui.ha_settings_dialog import HASettingsPanel
+
+        if hasattr(self, "_ha_win") and self._ha_win.winfo_exists():
+            self._ha_win.lift()
+            self._ha_win.focus_force()
+            return
+
+        win = tk.Toplevel(self)
+        win.title("Home Assistant Settings")
+        win.resizable(True, True)
+        win.transient(self)
+
+        panel = HASettingsPanel(win)
+        panel.frame.pack(fill="both", expand=True, padx=8, pady=8)
+
+        win.update_idletasks()
+        win.minsize(win.winfo_reqwidth(), win.winfo_reqheight())
+
+        self._ha_win = win
+
     # ========================================================================
     # BLOCKING MANAGEMENT
     # ========================================================================
+
+    def _push_ha_state(self) -> None:
+        """Fire-and-forget webhook push to HA — no-op if not configured."""
+        from focus_mode_app.core.ha_client import push_current_state
+
+        push_current_state()
 
     def toggle_blocking(self) -> None:
         """Toggle the block and update the interface.
@@ -444,8 +499,8 @@ class AppGui(ttk.Window):
 
         toggle_blocking()
         self.update_toggle_button()
-
         update_tray_menu()
+        self._push_ha_state()
 
     def update_toggle_button(self) -> None:
         """Update the text and style of the toggle button based on state."""
@@ -457,6 +512,57 @@ class AppGui(ttk.Window):
                 text="ACTIVATE STUDY MODE", bootstyle="success-outline"
             )
             self.show_feedback("Study Mode DEACTIVATED - No active blocks")
+
+    def on_remote_toggle(self, active: bool) -> None:
+        """Handle a toggle command received from the API queue on the GUI thread.
+
+        Uses toggle_blocking() (not set_blocking_active) to trigger auto-restore.
+        """
+        if active != is_blocking_active():
+            toggle_blocking()
+        self.update_toggle_button()
+        update_tray_menu()
+
+    def on_remote_lock(self, msg: dict) -> None:
+        """Activate a focus lock received from the API queue.
+
+        Also starts blocking if not already active.
+        """
+        mode = msg.get("mode")
+        if mode == "timer":
+            _focus_lock.set_timer_lock(msg["minutes"])
+        elif mode == "target":
+            _focus_lock.set_target_time_lock(msg["hour"], msg["minute"])
+        elif mode == "ha":
+            _focus_lock.set_ha_lock()
+
+        if not is_blocking_active():
+            toggle_blocking()
+            self.update_toggle_button()
+        update_tray_menu()
+
+    def on_remote_unlock(self) -> None:
+        """Remove any active focus lock (including HA Lock) from the API queue.
+
+        Re-enables GUI controls locked by HA Lock.
+        """
+        _focus_lock.clear_lock()
+        self.toggle_btn.config(state="normal")
+        self.btn_activate_lock.config(state="normal")
+
+    def on_remote_set_restore(self, enabled: bool) -> None:
+        """Update the auto-restore state and its GUI button from the API queue."""
+        set_restore_enabled(enabled)
+        if enabled:
+            self.restore_toggle_btn.config(
+                text="SUSPEND AUTO-RESTORE",
+                bootstyle="warning-outline",
+            )
+        else:
+            self.restore_toggle_btn.config(
+                text="ENABLE AUTO-RESTORE",
+                bootstyle="success-outline",
+            )
 
     # ========================================================================
     # RESTORE MANAGEMENT
@@ -519,13 +625,13 @@ class AppGui(ttk.Window):
 
     def refresh_restore_list(self) -> None:
         """Refresh the listbox with applications to be restored."""
-        self.restore_listbox.delete(0, ttk.END)
+        self.restore_listbox.delete(0, "end")
 
         try:
             from focus_mode_app.core.session import session_tracker
 
             for app_name in session_tracker.restore_list.keys():
-                self.restore_listbox.insert(ttk.END, f"{app_name}")
+                self.restore_listbox.insert("end", f"{app_name}")
         except Exception as e:
             print(f"[ERROR] Refresh restore list: {e}")
 
@@ -549,6 +655,7 @@ class AppGui(ttk.Window):
                 text="ENABLE AUTO-RESTORE", bootstyle="success-outline"
             )
             self.show_feedback("Auto-restore DISABLED")
+        self._push_ha_state()
 
     # ========================================================================
     # BLOCKED ITEMS MANAGEMENT
@@ -579,9 +686,10 @@ class AppGui(ttk.Window):
             return
 
         if add_blocked_item(name, item_type):
-            self.listbox.insert(ttk.END, f"{name}")
+            self.listbox.insert("end", f"{name}")
             self.show_feedback(f"Added and saved: {name}")
-            self.entry.delete(0, ttk.END)
+            self.entry.delete(0, "end")
+            self._push_ha_state()
         else:
             self.show_feedback("Item already exists or is invalid")
 
@@ -609,6 +717,7 @@ class AppGui(ttk.Window):
         if remove_blocked_item(index):
             self.listbox.delete(index)
             self.show_feedback(f"Removed: {item_name}")
+            self._push_ha_state()
         else:
             self.show_feedback("Error during removal")
 
@@ -618,12 +727,12 @@ class AppGui(ttk.Window):
         Synchronizes the interface with persistent storage.
         Uses get_blocked_items() for up-to-date data.
         """
-        self.listbox.delete(0, ttk.END)
+        self.listbox.delete(0, "end")
 
         items = get_blocked_items()
 
         for item in items:
-            self.listbox.insert(ttk.END, f"{item['name']}")
+            self.listbox.insert("end", f"{item['name']}")
 
         self.show_feedback(f"Blocked items: {len(items)}")
 
@@ -635,10 +744,6 @@ class AppGui(ttk.Window):
         """Show a temporary feedback message in the GUI.
 
         The message disappears automatically after the specified duration.
-
-        Args:
-            message (str): Text of the message.
-            duration (int): Duration in milliseconds before it vanishes.
         """
         self.feedback_label.config(text=message)
         self.after(duration, lambda: self.feedback_label.config(text=""))

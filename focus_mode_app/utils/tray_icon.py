@@ -10,7 +10,7 @@ import atexit
 try:
     from PyQt6.QtWidgets import QApplication, QSystemTrayIcon, QMenu
     from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor, QFont
-    from PyQt6.QtCore import Qt, QTimer
+    from PyQt6.QtCore import Qt, QTimer, QObject, pyqtSignal
 except ImportError:
     print("[ERROR] PyQt6 not installed: pip install PyQt6")
     sys.exit(1)
@@ -24,6 +24,43 @@ _tray_icon = None
 _app_gui = None
 _qt_app = None
 _is_quitting = False
+_controller = None
+
+
+class TrayController(QObject):
+    """Qt signal dispatcher for thread-safe tray icon updates."""
+
+    update_menu_signal = pyqtSignal()
+    hide_signal = pyqtSignal()
+    quit_signal = pyqtSignal()
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.update_menu_signal.connect(self.do_update_menu)
+        self.hide_signal.connect(self.do_hide)
+        self.quit_signal.connect(self.do_quit)
+
+    def do_update_menu(self) -> None:
+        if _tray_icon and not _is_quitting:
+            try:
+                menu = create_tray_menu()
+                _tray_icon.setContextMenu(menu)
+            except Exception:
+                pass
+
+    def do_hide(self) -> None:
+        if _tray_icon:
+            try:
+                _tray_icon.hide()
+            except Exception:
+                pass
+
+    def do_quit(self) -> None:
+        if _qt_app:
+            try:
+                _qt_app.quit()
+            except Exception:
+                pass
 
 
 # ============================================================================
@@ -32,11 +69,7 @@ _is_quitting = False
 
 
 def create_tray_icon_pixmap() -> QPixmap:
-    """Create a QPixmap for the tray icon.
-
-    Returns:
-        QPixmap: The generated icon pixmap.
-    """
+    """Create a QPixmap for the tray icon."""
     pixmap = QPixmap(64, 64)
     pixmap.fill(Qt.GlobalColor.transparent)
 
@@ -65,20 +98,12 @@ def create_tray_icon_pixmap() -> QPixmap:
 
 
 def get_toggle_text() -> str:
-    """Dynamic text for the toggle action.
-
-    Returns:
-        str: Text corresponding to current blocking state.
-    """
+    """Return dynamic text for the toggle action."""
     return "⏸️ Stop Block" if is_blocking_active() else "▶️ Start Block"
 
 
 def create_tray_menu() -> QMenu:
-    """Create the contextual tray menu.
-
-    Returns:
-        QMenu: The created menu object.
-    """
+    """Create the contextual tray menu."""
     menu = QMenu()
 
     toggle_action = menu.addAction(get_toggle_text())
@@ -96,13 +121,13 @@ def create_tray_menu() -> QMenu:
 
 
 def update_menu() -> None:
-    """Update the context menu if it is currently active."""
-    if _tray_icon and not _is_quitting:
+    """Update the context menu via signal for cross-thread safety."""
+    global _controller
+    if _controller and not _is_quitting:
         try:
-            menu = create_tray_menu()
-            _tray_icon.setContextMenu(menu)
-        except Exception:
-            pass
+            _controller.update_menu_signal.emit()
+        except Exception as e:
+            print(f"[ERROR] update_menu signal emit failed: {e}")
 
 
 # ============================================================================
@@ -175,11 +200,7 @@ def on_quit_app() -> None:
 
 
 def on_tray_activated(reason: QSystemTrayIcon.ActivationReason) -> None:
-    """Handle tray icon clicks.
-
-    Args:
-        reason: Enumeration representing the reason the tray was activated.
-    """
+    """Handle tray icon clicks."""
     if reason == QSystemTrayIcon.ActivationReason.DoubleClick:
         on_show_gui()
 
@@ -190,20 +211,15 @@ def on_tray_activated(reason: QSystemTrayIcon.ActivationReason) -> None:
 
 
 def cleanup_qt() -> None:
-    """Clean up elements to avoid crashes upon exit."""
-    global _is_quitting
+    """Clean up Qt resources via signals to avoid cross-thread crashes."""
+    global _is_quitting, _controller
 
     _is_quitting = True
 
-    if _tray_icon:
+    if _controller:
         try:
-            _tray_icon.hide()
-        except Exception:
-            pass
-
-    if _qt_app:
-        try:
-            _qt_app.quit()
+            _controller.hide_signal.emit()
+            _controller.quit_signal.emit()
         except Exception:
             pass
 
@@ -220,20 +236,19 @@ atexit.register(cleanup_qt)
 def create_and_run_tray_icon(app_gui=None) -> None:
     """Create and start the system tray icon loop.
 
-    BLOCKING CALL - must run in a separate thread.
-
-    Args:
-        app_gui: Reference to the Tkinter root window.
+    BLOCKING CALL — must run in a separate thread.
     """
-    global _tray_icon, _app_gui, _qt_app
+    global _tray_icon, _app_gui, _qt_app, _controller
 
     try:
         _app_gui = app_gui
 
-        # Create QApplication
+        # Reuse QApplication created in main thread if available
         _qt_app = QApplication.instance()
         if _qt_app is None:
             _qt_app = QApplication(sys.argv)
+
+        _controller = TrayController()
 
         # Create icon
         pixmap = create_tray_icon_pixmap()
@@ -255,7 +270,7 @@ def create_and_run_tray_icon(app_gui=None) -> None:
         print("[INFO] System tray icon created")
         print("[INFO] Right click = Menu | Double click = GUI")
 
-        # Update timer
+        # Keepalive timer — prevents Qt event loop from blocking indefinitely
         timer = QTimer()
         timer.timeout.connect(lambda: None)
         timer.start(100)
@@ -271,7 +286,7 @@ def create_and_run_tray_icon(app_gui=None) -> None:
 
 
 def update_tray_menu() -> None:
-    """Update the tray logic menu interface."""
+    """Update the tray context menu."""
     update_menu()
 
 
@@ -281,11 +296,7 @@ def stop_tray_icon() -> None:
 
 
 def get_tray_icon() -> QSystemTrayIcon:
-    """Return the raw Qt tray icon object.
-
-    Returns:
-        QSystemTrayIcon: The active tray icon or None.
-    """
+    """Return the active Qt tray icon object."""
     return _tray_icon
 
 

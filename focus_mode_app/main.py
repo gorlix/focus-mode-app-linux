@@ -5,6 +5,7 @@ Handles initialization, resource loading, and main thread execution.
 Integrates session restoration for automatic app recovery.
 """
 
+import logging
 import sys
 import threading
 import signal
@@ -16,6 +17,7 @@ from focus_mode_app.core.blocker import start_blocking_loop, set_blocking_active
 from focus_mode_app.core.session import session_tracker
 from focus_mode_app.gui.main_window import AppGui
 from focus_mode_app.utils.tray_icon import create_and_run_tray_icon, stop_tray_icon
+from focus_mode_app.api.launcher import start_api, stop_api
 
 
 _blocking_thread: Optional[threading.Thread] = None
@@ -23,9 +25,35 @@ _tray_thread: Optional[threading.Thread] = None
 _app_instance: Optional[AppGui] = None
 
 
+def _setup_logging() -> None:
+    """Configure shell logging for HA client and config modules."""
+    fmt = logging.Formatter(
+        "%(asctime)s [%(levelname)-8s] %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
+    )
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(fmt)
+
+    root = logging.getLogger()
+    root.setLevel(logging.WARNING)
+    root.addHandler(handler)
+
+    for name in (
+        "focus_mode_app.core.ha_client",
+        "focus_mode_app.core.ha_config",
+        "focus_mode_app.gui.ha_settings_dialog",
+        "focus_mode_app.api.launcher",
+        "focus_mode_app.api.notifier",
+    ):
+        lg = logging.getLogger(name)
+        lg.setLevel(logging.DEBUG)
+        lg.propagate = True
+
+
 def cleanup_handlers() -> None:
     """Stop all active threads and clean up before exiting."""
     try:
+        stop_api()
         set_blocking_active(False)
 
         try:
@@ -38,12 +66,7 @@ def cleanup_handlers() -> None:
 
 
 def signal_handler(signum: int, frame: Optional[object]) -> None:
-    """Handle termination signals to gracefully shut down the app.
-
-    Args:
-        signum (int): The signal number received.
-        frame (Optional[object]): The current stack frame.
-    """
+    """Handle termination signals to gracefully shut down the app."""
     print("\n[INFO] Termination signal received")
     cleanup_handlers()
     sys.exit(0)
@@ -56,14 +79,23 @@ def main() -> None:
     background blocking thread and the system tray thread, and starts
     the main GUI event loop.
     """
+    _setup_logging()
     print("[INFO] Starting Focus Mode App...")
 
     global _blocking_thread, _tray_thread, _app_instance
 
+    # QApplication must be created in the main thread before any Qt widget
+    # (including the tray icon thread). We do it here so TrayThread reuses it.
+    try:
+        from PyQt6.QtWidgets import QApplication
+
+        if QApplication.instance() is None:
+            _qt_app_global = QApplication(sys.argv)  # noqa: F841
+    except ImportError:
+        pass
+
     load_config()
-
     load_blocked_items()
-
     session_tracker.load_restore_config()
 
     _app_instance = AppGui()
@@ -97,6 +129,8 @@ def main() -> None:
     # ========================================================================
     # GUI MAINLOOP
     # ========================================================================
+
+    start_api()
 
     try:
         _app_instance.mainloop()
