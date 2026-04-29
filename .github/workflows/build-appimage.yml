@@ -112,6 +112,16 @@ jobs:
           ln -sf focus-mode-app.png AppDir/.DirIcon
 
       # -----------------------------------------------------------------------
+      # Bundle appimageupdatetool so the app can apply delta updates without
+      # requiring the user to have it installed on their system.
+      - name: Bundle appimageupdatetool for in-app updates
+        run: |
+          wget -q \
+            "https://github.com/AppImage/AppImageUpdate/releases/download/continuous/appimageupdatetool-x86_64.AppImage" \
+            -O AppDir/appimageupdatetool
+          chmod +x AppDir/appimageupdatetool
+
+      # -----------------------------------------------------------------------
       - name: Download appimagetool
         run: |
           wget -q \

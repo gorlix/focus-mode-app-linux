@@ -79,18 +79,15 @@ def cleanup_handlers() -> None:
         pass
 
 
-def _start_update_check() -> None:
+def _start_update_check(app_gui: "AppGui") -> None:
     """Fire-and-forget update check — only runs when launched from an AppImage."""
     from focus_mode_app.core.updater import check_for_updates
-    from focus_mode_app.core.notifications import send_desktop_notification
 
     def _on_update(new_version: str) -> None:
-        send_desktop_notification(
-            "Focus Mode App — Update Available",
-            f"Version {new_version} is available.\n"
-            "Run: appimageupdatetool $APPIMAGE",
-            "software-update-available",
-        )
+        try:
+            app_gui.after(0, lambda: app_gui.show_update_dialog(new_version))
+        except Exception:
+            pass
 
     check_for_updates(_on_update)
 
@@ -144,7 +141,7 @@ def main() -> None:
     setup_tray_icon(_app_instance)
 
     # Check for AppImage updates in the background (no-op when not an AppImage).
-    _start_update_check()
+    _start_update_check(_app_instance)
 
     # ========================================================================
     # MAIN LOOP (Qt event loop — replaces tk.mainloop())

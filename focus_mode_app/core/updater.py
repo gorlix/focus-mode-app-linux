@@ -48,33 +48,54 @@ def check_for_updates(callback: Callable[[str], None]) -> None:
     ).start()
 
 
-def apply_update() -> None:
-    """Launch appimageupdatetool (or AppImageUpdate) to apply a delta update.
+def _find_update_tool() -> Optional[str]:
+    """Return path to appimageupdatetool, preferring the bundled copy in $APPDIR."""
+    import shutil
 
-    The tool downloads only the changed blocks and writes the updated AppImage
-    in-place.  The user must restart the app after the update completes.
+    appdir = os.environ.get("APPDIR", "")
+    if appdir:
+        candidate = os.path.join(appdir, "appimageupdatetool")
+        if os.path.isfile(candidate) and os.access(candidate, os.X_OK):
+            return candidate
+    return shutil.which("appimageupdatetool")
+
+
+def apply_update() -> bool:
+    """Launch appimageupdatetool to perform a delta update in-place.
+
+    Returns True if the tool was launched successfully, False if not found.
+    Uses APPIMAGE_EXTRACT_AND_RUN=1 so the tool (itself an AppImage) works
+    without FUSE.  The process is detached — the user must restart the app.
     """
     appimage_path = os.environ.get("APPIMAGE")
     if not appimage_path:
-        return
+        _LOGGER.debug("Not running as AppImage — skipping update")
+        return False
 
-    for tool in ("appimageupdatetool", "AppImageUpdate"):
-        try:
-            subprocess.Popen(
-                [tool, appimage_path],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            _LOGGER.info("Update launched via %s", tool)
-            return
-        except FileNotFoundError:
-            continue
+    tool = _find_update_tool()
+    if not tool:
+        _LOGGER.warning(
+            "appimageupdatetool not found — install it from "
+            "https://github.com/AppImage/AppImageUpdate/releases"
+        )
+        return False
 
-    _LOGGER.warning(
-        "appimageupdatetool not found — install it from "
-        "https://github.com/AppImage/AppImageUpdate/releases "
-        "to enable one-click updates."
-    )
+    env = os.environ.copy()
+    env["APPIMAGE_EXTRACT_AND_RUN"] = "1"
+
+    try:
+        subprocess.Popen(
+            [tool, appimage_path],
+            env=env,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        _LOGGER.info("Update launched via %s", tool)
+        return True
+    except Exception as e:
+        _LOGGER.error("Failed to launch update tool: %s", e)
+        return False
 
 
 # ============================================================================
