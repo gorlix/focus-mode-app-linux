@@ -1,8 +1,11 @@
 name: Build and Release AppImage
 
-# Triggered only when a version tag is pushed (e.g. v2.1.0)
+# Push to main  → build check only (no upload, catches broken builds early)
+# Push v* tag   → full build + GitHub Release + AppImage + zsync
 on:
   push:
+    branches:
+      - main
     tags:
       - 'v[0-9]*.[0-9]*.[0-9]*'
 
@@ -11,7 +14,7 @@ permissions:
 
 jobs:
   build-appimage:
-    name: Build AppImage (x86_64)
+    name: ${{ startsWith(github.ref, 'refs/tags/') && 'Build & Release AppImage' || 'Build check AppImage' }}
     runs-on: ubuntu-22.04   # glibc 2.35 — compatible with Ubuntu 22.04+
 
     steps:
@@ -20,11 +23,19 @@ jobs:
         uses: actions/checkout@v4
 
       # -----------------------------------------------------------------------
-      - name: Extract version metadata from tag
+      # On a tag push: use the tag as version (e.g. v2.1.0 → 2.1.0).
+      # On a branch push: use a dev sentinel — the build is for verification
+      # only, no artifact is published.
+      - name: Extract version metadata
         id: meta
         run: |
-          TAG="${GITHUB_REF_NAME}"                         # e.g. v2.1.0
-          VERSION="${TAG#v}"                               # e.g. 2.1.0
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            TAG="${GITHUB_REF_NAME}"                       # e.g. v2.1.0
+            VERSION="${TAG#v}"                             # e.g. 2.1.0
+          else
+            TAG=""
+            VERSION="0.0.0.dev0"
+          fi
           APPIMAGE="Focus-Mode-App-${VERSION}-x86_64.AppImage"
           echo "tag=${TAG}"           >> "$GITHUB_OUTPUT"
           echo "version=${VERSION}"   >> "$GITHUB_OUTPUT"
@@ -35,6 +46,7 @@ jobs:
       # Tag the merge commit and its message becomes the release description.
       - name: Extract release notes from tagged commit
         id: notes
+        if: startsWith(github.ref, 'refs/tags/')
         run: |
           {
             echo 'body<<EOF'
@@ -64,7 +76,7 @@ jobs:
           .venv/bin/pip install -r requirements.txt
 
       # -----------------------------------------------------------------------
-      # Stamp the tag version into pyproject.toml so importlib.metadata returns
+      # Stamp the version into pyproject.toml so importlib.metadata returns
       # the correct string at runtime (used by the auto-update checker).
       - name: Stamp version into pyproject.toml
         env:
@@ -132,11 +144,24 @@ jobs:
           APPIMAGE: ${{ steps.meta.outputs.appimage }}
         run: |
           zsyncmake "$APPIMAGE" -u "$APPIMAGE"
-          # Verify both files exist
           ls -lh "$APPIMAGE" "${APPIMAGE}.zsync"
 
       # -----------------------------------------------------------------------
+      # Branch push: upload AppImage as a temporary artifact (7-day retention)
+      # so it can be downloaded and tested without creating a release.
+      - name: Upload build artifact
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v4
+        with:
+          name: focus-mode-app-dev-build
+          path: |
+            ${{ steps.meta.outputs.appimage }}
+            ${{ steps.meta.outputs.appimage }}.zsync
+          retention-days: 7
+
+      # -----------------------------------------------------------------------
       - name: Create GitHub Release and upload assets
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
           name: "Focus Mode App ${{ steps.meta.outputs.tag }}"
