@@ -31,6 +31,18 @@ jobs:
           echo "appimage=${APPIMAGE}" >> "$GITHUB_OUTPUT"
 
       # -----------------------------------------------------------------------
+      # Release notes = full message of the tagged commit (subject + body).
+      # Tag the merge commit and its message becomes the release description.
+      - name: Extract release notes from tagged commit
+        id: notes
+        run: |
+          {
+            echo 'body<<EOF'
+            git log -1 --format='%B'
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      # -----------------------------------------------------------------------
       - name: Install system dependencies
         run: |
           sudo apt-get update -q
@@ -128,10 +140,10 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           name: "Focus Mode App ${{ steps.meta.outputs.tag }}"
+          body: ${{ steps.notes.outputs.body }}
           draft: false
           # Tags containing "-" (e.g. v2.1.0-beta) are marked as pre-release
           prerelease: ${{ contains(steps.meta.outputs.tag, '-') }}
-          generate_release_notes: true
           files: |
             ${{ steps.meta.outputs.appimage }}
             ${{ steps.meta.outputs.appimage }}.zsync
