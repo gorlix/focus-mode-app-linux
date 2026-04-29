@@ -802,6 +802,34 @@ class AppGui(ttk.Window):
         self.withdraw()
         print("[INFO] Window hidden")
 
+    def show_update_dialog(self, new_version: str) -> None:
+        """Offer the user a one-click delta update to new_version."""
+        from focus_mode_app.core.updater import apply_update, get_current_version
+
+        current = get_current_version() or "?"
+        if not messagebox.askyesno(
+            "Aggiornamento disponibile",
+            f"È disponibile la versione {new_version} (attuale: {current}).\n\n"
+            "Vuoi aggiornare ora? Riavvia l'app al termine dell'aggiornamento.",
+            parent=self,
+        ):
+            return
+
+        if apply_update():
+            messagebox.showinfo(
+                "Aggiornamento in corso",
+                "L'aggiornamento è stato avviato in background.\n"
+                "Riavvia l'app al termine.",
+                parent=self,
+            )
+        else:
+            messagebox.showwarning(
+                "Strumento non trovato",
+                "appimageupdatetool non trovato.\n"
+                "Scarica manualmente l'ultima versione da GitHub.",
+                parent=self,
+            )
+
     def quit_app(self) -> None:
         """Completely exit the application with a confirmation dialog.
 
