@@ -12,7 +12,7 @@ import atexit
 
 try:
     from PyQt6.QtWidgets import QApplication, QSystemTrayIcon, QMenu
-    from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor, QFont
+    from PyQt6.QtGui import QIcon, QPixmap, QPainter, QColor, QPen
     from PyQt6.QtCore import Qt, QTimer, QObject, pyqtSignal
 except ImportError:
     print("[ERROR] PyQt6 not installed: pip install PyQt6")
@@ -48,6 +48,8 @@ class TrayController(QObject):
         if _tray_icon and not _is_quitting:
             try:
                 _tray_icon.setContextMenu(create_tray_menu())
+                state = "active" if is_blocking_active() else "idle"
+                _tray_icon.setIcon(QIcon(_draw_tray_icon(state)))
             except Exception:
                 pass
 
@@ -71,22 +73,35 @@ class TrayController(QObject):
 # ============================================================================
 
 
-def create_tray_icon_pixmap() -> QPixmap:
-    """Create a QPixmap for the tray icon."""
-    pixmap = QPixmap(64, 64)
+def _draw_tray_icon(state: str) -> QPixmap:
+    """
+    state='idle'   → green circle + checkmark ✓
+    state='active' → red circle + stop square ■
+    """
+    size = 64
+    pixmap = QPixmap(size, size)
     pixmap.fill(Qt.GlobalColor.transparent)
 
     painter = QPainter(pixmap)
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-    painter.setBrush(QColor("#6750A4"))
-    painter.setPen(QColor("white"))
+    color = QColor("#4CAF50") if state == "idle" else QColor("#E53935")
+    painter.setBrush(color)
+    painter.setPen(Qt.PenStyle.NoPen)
     painter.drawEllipse(4, 4, 56, 56)
 
-    painter.setPen(QColor("white"))
-    font = QFont("Sans", 28, QFont.Weight.Bold)
-    painter.setFont(font)
-    painter.drawText(pixmap.rect(), Qt.AlignmentFlag.AlignCenter, "M")
+    if state == "idle":
+        pen = QPen(QColor("white"))
+        pen.setWidth(5)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        painter.setPen(pen)
+        painter.drawLine(15, 34, 27, 46)
+        painter.drawLine(27, 46, 50, 20)
+    else:
+        painter.setBrush(QColor("white"))
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.drawRoundedRect(18, 18, 28, 28, 4, 4)
 
     painter.end()
     return pixmap
@@ -233,7 +248,7 @@ def setup_tray_icon(app_gui=None) -> None:
 
     _controller = TrayController()
 
-    pixmap = create_tray_icon_pixmap()
+    pixmap = _draw_tray_icon("idle")
     _tray_icon = QSystemTrayIcon(QIcon(pixmap))
     _tray_icon.setToolTip(TRAY_TOOLTIP)
     _tray_icon.setContextMenu(create_tray_menu())
