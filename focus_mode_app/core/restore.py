@@ -3,11 +3,42 @@ core/restore.py
 Application restoration mechanics without xdotool (Wayland-safe).
 """
 
+import os
 import subprocess
 import time
 from typing import Dict, Tuple, Any, List
 
 from focus_mode_app.core.session import session_tracker
+
+
+def _clean_env_for_restore() -> dict:
+    """Return an environment suitable for restored apps.
+
+    PyInstaller prepends its _internal/ dir to LD_LIBRARY_PATH and saves
+    the original value as LD_LIBRARY_PATH_ORIG.  Without this cleanup,
+    restored apps inherit Focus Mode's bundled libs and crash immediately.
+    AppImage-specific vars (APPDIR, TCL_LIBRARY, …) are stripped for the
+    same reason.
+    """
+    env = os.environ.copy()
+
+    orig_ldpath = env.pop("LD_LIBRARY_PATH_ORIG", None)
+    if orig_ldpath is not None:
+        if orig_ldpath:
+            env["LD_LIBRARY_PATH"] = orig_ldpath
+        else:
+            env.pop("LD_LIBRARY_PATH", None)
+
+    for var in (
+        "APPDIR",
+        "APPIMAGE",
+        "APPIMAGE_EXTRACT_AND_RUN",
+        "TCL_LIBRARY",
+        "TK_LIBRARY",
+    ):
+        env.pop(var, None)
+
+    return env
 
 
 def restore_app(app_state: Dict[str, Any]) -> Tuple[bool, str]:
@@ -36,6 +67,7 @@ def restore_app(app_state: Dict[str, Any]) -> Tuple[bool, str]:
         subprocess.Popen(
             cmd,
             cwd=cwd,
+            env=_clean_env_for_restore(),
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             start_new_session=True,
