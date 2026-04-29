@@ -485,6 +485,15 @@ class AppGui(ttk.Window):
 
         push_current_state()
 
+    def _notify_if_bg(
+        self, title: str, message: str, icon: str = "dialog-information"
+    ) -> None:
+        """Send a desktop notification only when the GUI window is not visible."""
+        if self.state() in ("iconic", "withdrawn"):
+            from focus_mode_app.core.notifications import send_desktop_notification
+
+            send_desktop_notification(title, message, icon)
+
     def toggle_blocking(self) -> None:
         """Toggle the block and update the interface.
 
@@ -498,6 +507,12 @@ class AppGui(ttk.Window):
                 return
 
         toggle_blocking()
+        if is_blocking_active():
+            self._notify_if_bg(
+                "Focus Mode attivato", "Il blocco delle app è attivo.", "dialog-warning"
+            )
+        else:
+            self._notify_if_bg("Focus Mode disattivato", "Il blocco è stato rimosso.")
         self.update_toggle_button()
         update_tray_menu()
         self._push_ha_state()
@@ -520,6 +535,17 @@ class AppGui(ttk.Window):
         """
         if active != is_blocking_active():
             toggle_blocking()
+            if active:
+                self._notify_if_bg(
+                    "Focus Mode attivato da Home Assistant",
+                    "Il blocco delle app è stato attivato.",
+                    "dialog-warning",
+                )
+            else:
+                self._notify_if_bg(
+                    "Focus Mode disattivato da Home Assistant",
+                    "Il blocco è stato rimosso.",
+                )
         self.update_toggle_button()
         update_tray_menu()
 
@@ -530,11 +556,27 @@ class AppGui(ttk.Window):
         """
         mode = msg.get("mode")
         if mode == "timer":
-            _focus_lock.set_timer_lock(msg["minutes"])
+            minutes = msg.get("minutes", 0)
+            _focus_lock.set_timer_lock(minutes)
+            self._notify_if_bg(
+                "Blocco timer attivato da Home Assistant",
+                f"Non puoi disattivare il Focus Mode per {minutes} minuti.",
+                "dialog-warning",
+            )
         elif mode == "target":
             _focus_lock.set_target_time_lock(msg["hour"], msg["minute"])
+            self._notify_if_bg(
+                "Blocco orario attivato da Home Assistant",
+                f"Non puoi disattivare fino alle {msg['hour']:02d}:{msg['minute']:02d}.",
+                "dialog-warning",
+            )
         elif mode == "ha":
             _focus_lock.set_ha_lock()
+            self._notify_if_bg(
+                "Blocco HA attivato da Home Assistant",
+                "Solo Home Assistant può rimuovere questo blocco.",
+                "dialog-warning",
+            )
 
         if not is_blocking_active():
             toggle_blocking()
@@ -547,6 +589,10 @@ class AppGui(ttk.Window):
         Re-enables GUI controls locked by HA Lock.
         """
         _focus_lock.clear_lock()
+        self._notify_if_bg(
+            "Blocco rimosso da Home Assistant",
+            "Puoi ora disattivare il Focus Mode dalla GUI.",
+        )
         self.toggle_btn.config(state="normal")
         self.btn_activate_lock.config(state="normal")
 
