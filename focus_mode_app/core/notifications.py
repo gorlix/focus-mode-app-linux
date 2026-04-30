@@ -3,8 +3,33 @@ core/notifications.py
 System for desktop and GUI notifications.
 """
 
+import os
 import subprocess
 from typing import Optional, Any
+
+
+def _clean_subprocess_env() -> dict:
+    """Return an environment free of PyInstaller/AppImage library overrides.
+
+    Identical logic to restore._clean_env_for_restore() — duplicated here to
+    avoid a cross-module dependency between notifications and restore.
+    """
+    env = os.environ.copy()
+    if "APPIMAGE" in env:
+        orig = env.pop("LD_LIBRARY_PATH_ORIG", None)
+        if orig:
+            env["LD_LIBRARY_PATH"] = orig
+        else:
+            env.pop("LD_LIBRARY_PATH", None)
+    for var in (
+        "APPDIR",
+        "APPIMAGE",
+        "APPIMAGE_EXTRACT_AND_RUN",
+        "TCL_LIBRARY",
+        "TK_LIBRARY",
+    ):
+        env.pop(var, None)
+    return env
 
 
 def send_desktop_notification(
@@ -27,6 +52,7 @@ def send_desktop_notification(
                 title,
                 message,
             ],
+            env=_clean_subprocess_env(),
             timeout=5,
             check=False,
         )
