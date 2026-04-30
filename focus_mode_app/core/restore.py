@@ -14,16 +14,21 @@ from focus_mode_app.core.session import session_tracker
 def _clean_env_for_restore() -> dict:
     """Return an environment suitable for restored apps.
 
-    PyInstaller prepends its _internal/ dir to LD_LIBRARY_PATH and saves
-    the original value as LD_LIBRARY_PATH_ORIG.  Without this cleanup,
-    restored apps inherit Focus Mode's bundled libs and crash immediately.
-    AppImage-specific vars (APPDIR, TCL_LIBRARY, …) are stripped for the
-    same reason.
+    When running as a PyInstaller AppImage, LD_LIBRARY_PATH is polluted
+    with the bundled _internal/ paths.  PyInstaller saves the original
+    value as LD_LIBRARY_PATH_ORIG — but only if LD_LIBRARY_PATH was
+    already set before launch.  On systems where it was unset (common on
+    Arch), PyInstaller sets LD_LIBRARY_PATH fresh with no _ORIG counterpart.
+
+    The correct strategy when APPIMAGE is in the environment:
+      - If LD_LIBRARY_PATH_ORIG exists → restore it.
+      - If not → remove LD_LIBRARY_PATH entirely (PyInstaller set it from
+        scratch; the system default for child processes is "no value").
     """
     env = os.environ.copy()
 
-    orig_ldpath = env.pop("LD_LIBRARY_PATH_ORIG", None)
-    if orig_ldpath is not None:
+    if "APPIMAGE" in env:
+        orig_ldpath = env.pop("LD_LIBRARY_PATH_ORIG", None)
         if orig_ldpath:
             env["LD_LIBRARY_PATH"] = orig_ldpath
         else:
